@@ -218,6 +218,97 @@ describe("endings", () => {
   });
 });
 
+describe("short round with three players", () => {
+  const trio: RoleId[] = ["werwolf", "seherin", "dorfbewohner"];
+
+  /** Through the night and the morning, up to the one vote. */
+  function toVote(): GameState {
+    let s = setup(trio);
+    s = act(s, "p1", { type: "seerPeek", target: "p0" });
+    s = act(s, "p0", { type: "suspect", target: "p2" });
+    s = act(s, "p2", { type: "suspect", target: "p0" });
+    expect(s.announce).toMatchObject({ kind: "morning", deaths: [] });
+    s = ackAll(s);
+    expect(s.phase).toBe("discussion");
+    s = ackAll(s);
+    expect(s.phase).toBe("vote");
+    return s;
+  }
+
+  it("deals wolf, seer and villager whatever the settings say", () => {
+    let s = newGame("TEST", 0);
+    for (let i = 0; i < 3; i++) s = addPlayer(s, { id: `p${i}`, name: `S${i}`, tokenHash: "x" });
+    s = act(s, "p0", { type: "settings", settings: { auto: false, custom: { wolves: 1, hexe: true, amor: true } } });
+    expect(viewFor(s, "p0", { now: 0, online: new Set() })!.short).toBe(true);
+    s = act(s, "p0", { type: "start" });
+    expect(s.short).toBe(true);
+    expect(s.players.map((p) => p.role).sort()).toEqual([...trio].sort());
+
+    const four = setup(["werwolf", "seherin", "dorfbewohner", "dorfbewohner"]);
+    expect(four.short).toBe(false);
+  });
+
+  it("lets nobody die at night: the wolf only taps along", () => {
+    const s = setup(trio);
+    expect(nightTask(s, s.players[0])).toBe("lurk");
+    expect(viewFor(s, "p0", { now: 0, online: new Set() })!.night).toMatchObject({
+      task: "suspect",
+      lurking: true,
+    });
+    expect(viewFor(s, "p2", { now: 0, online: new Set() })!.night!.lurking).toBe(false);
+    expect(() => act(s, "p0", { type: "wolfVote", target: "p1" })).toThrow(GameError);
+    const morning = toVote();
+    expect(morning.players.every((p) => p.alive)).toBe(true);
+    // The wolf's tap is not counted as a guess at who the wolf is.
+    expect(morning.suspicions.map((t) => t.by)).toEqual(["p2"]);
+  });
+
+  it("is won by the village when the one vote hits the wolf", () => {
+    let s = toVote();
+    s = act(s, "p0", { type: "vote", target: "p1" });
+    s = act(s, "p1", { type: "vote", target: "p0" });
+    s = act(s, "p2", { type: "vote", target: "p0" });
+    s = ackAll(s);
+    expect(s.phase).toBe("ended");
+    expect(s.winner).toBe("dorf");
+  });
+
+  it("is won by the wolf when the vote hits somebody else", () => {
+    let s = toVote();
+    s = act(s, "p0", { type: "vote", target: "p1" });
+    s = act(s, "p1", { type: "vote", target: "p0" });
+    s = act(s, "p2", { type: "vote", target: "p1" });
+    s = ackAll(s);
+    expect(s.winner).toBe("wolf");
+  });
+
+  it("is won by the wolf when the village cannot agree, without a second night", () => {
+    let s = toVote();
+    for (let round = 0; round < 2; round++) {
+      s = act(s, "p0", { type: "vote", target: "p1" });
+      s = act(s, "p1", { type: "vote", target: "p0" });
+      s = act(s, "p2", { type: "vote", target: null });
+    }
+    expect(s.announce).toMatchObject({ kind: "verdict", deaths: [], tie: true });
+    s = ackAll(s);
+    expect(s.phase).toBe("ended");
+    expect(s.winner).toBe("wolf");
+    expect(s.round).toBe(1);
+  });
+
+  it("is an ordinary game again once a fourth player joins", () => {
+    let s = toVote();
+    s = act(s, "p0", { type: "abort" });
+    expect(s.short).toBe(false);
+    s = addPlayer(s, { id: "p3", name: "Vier", tokenHash: "x" });
+    s = act(s, "p0", { type: "start" });
+    expect(s.short).toBe(false);
+    s = ackAll(s);
+    const wolf = s.players.find((p) => p.role === "werwolf")!;
+    expect(nightTask(s, wolf)).toBe("wolf");
+  });
+});
+
 describe("day", () => {
   function toVote(): GameState {
     let s = setup(["werwolf", "dorfbewohner", "dorfbewohner", "dorfbewohner", "dorfbewohner", "dorfbewohner"]);
@@ -330,7 +421,7 @@ describe("whole games", () => {
   it("always reach an end and never leak a hidden role", { timeout: 60_000 }, () => {
     const winners = new Set<string>();
     const none = { now: 0, online: new Set<string>() };
-    for (let n = 4; n <= 12; n++) {
+    for (let n = 3; n <= 12; n++) {
       for (let seed = 0; seed < 60; seed++) {
         const rng = mulberry32(n * 1000 + seed);
         let s = newGame("FUZZ", 0);

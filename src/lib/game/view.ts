@@ -1,5 +1,5 @@
 import { ackers, nightDone, nightTask } from "./engine";
-import { composition, MAX_PLAYERS, MIN_PLAYERS, ROLE_ORDER } from "./roles";
+import { composition, MAX_PLAYERS, MIN_PLAYERS, ROLE_ORDER, SHORT_ROUND_PLAYERS } from "./roles";
 import type { GameState, Player, RoleId, View } from "./types";
 
 /** Dead players watch as ghosts, except a hunter who still has to aim. */
@@ -84,13 +84,14 @@ export function viewFor(
     const task = nightTask(s, me);
     const peek = s.seerLog.find((e) => e.round === s.round);
     night = {
-      task,
+      task: task === "lurk" ? "suspect" : task,
+      lurking: task === "lurk",
       pick:
         task === "wolf"
           ? (s.night.wolfVotes[me.id] ?? null)
           : task === "seer"
             ? (peek?.target ?? null)
-            : task === "suspect"
+            : task === "suspect" || task === "lurk"
               ? (s.night.suspects[me.id] ?? null)
               : null,
       wolfVotes: task === "wolf" ? s.night.wolfVotes : null,
@@ -125,6 +126,8 @@ export function viewFor(
   return {
     code: s.code,
     phase: s.phase,
+    // Rooms saved before short rounds existed have no flag yet.
+    short: s.phase === "lobby" ? s.players.length === SHORT_ROUND_PLAYERS : Boolean(s.short),
     round: s.round,
     now: ctx.now,
     deadline: s.deadline,

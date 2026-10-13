@@ -51,6 +51,10 @@ export function Rules() {
           <li>Wer ausscheidet, zeigt seine Rolle, darf zuschauen und verrät nichts mehr.</li>
           <li>Bei Gleichstand gibt es eine Stichwahl. Steht es wieder gleich, muss niemand gehen.</li>
           <li>Sind die Verliebten aus verschiedenen Teams, gewinnen sie nur gemeinsam als Letzte.</li>
+          <li>
+            Zu dritt spielt ihr eine Kurzrunde: Nachts scheidet niemand aus, die Seherin findet den
+            Werwolf, und eine einzige Abstimmung entscheidet.
+          </li>
           <li>Hängt das Spiel, kann die Spielleitung im Menü eine Phase überspringen.</li>
         </ul>
       </div>

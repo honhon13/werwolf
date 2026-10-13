@@ -150,18 +150,27 @@ export function Lobby({ view, api }: PhaseProps) {
         ) : (
           <p className="text-center font-bold text-ink-soft">{setup.error}</p>
         )}
+        {view.short && (
+          <p className="text-center text-ink-soft">
+            <b className="text-ink">Kurzrunde zu dritt:</b> In der Nacht scheidet niemand aus. Die
+            Seherin findet den Werwolf – und am Tag habt ihr genau eine Abstimmung, um ihn zu
+            verbannen.
+          </p>
+        )}
 
         {me.host && (
           <div className="space-y-3 border-t border-line pt-3">
-            <Segmented
-              value={setup.auto}
-              options={[
-                { value: true, label: "Automatisch" },
-                { value: false, label: "Selbst wählen" },
-              ]}
-              onChange={(auto) => change({ auto })}
-            />
-            {!setup.auto && (
+            {!view.short && (
+              <Segmented
+                value={setup.auto}
+                options={[
+                  { value: true, label: "Automatisch" },
+                  { value: false, label: "Selbst wählen" },
+                ]}
+                onChange={(auto) => change({ auto })}
+              />
+            )}
+            {!view.short && !setup.auto && (
               <>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-extrabold">🐺 Werwölfe</span>

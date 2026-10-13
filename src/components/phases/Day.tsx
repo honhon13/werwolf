@@ -28,10 +28,12 @@ export function AnnouncePhase({ view, api }: PhaseProps) {
           a.deaths.length > 0
             ? undefined
             : a.kind === "morning"
-              ? "Alle haben die Nacht überlebt!"
-              : a.tie
-                ? "Wieder Gleichstand – heute muss niemand gehen."
-                : "Niemand wurde gewählt – heute muss niemand gehen."
+              ? view.short
+                ? "Alle haben die Nacht überlebt – doch einer von euch ist ein Werwolf!"
+                : "Alle haben die Nacht überlebt!"
+              : `${a.tie ? "Wieder Gleichstand" : "Niemand wurde gewählt"} – ${
+                  view.short ? "der Werwolf bleibt unentdeckt." : "heute muss niemand gehen."
+                }`
         }
       >
         {ANNOUNCE_TITLE[a.kind]}
@@ -41,6 +43,16 @@ export function AnnouncePhase({ view, api }: PhaseProps) {
         <div className="grid flex-1 place-items-center text-8xl" aria-hidden>
           {a.kind === "morning" ? "🌤️" : "🤷"}
         </div>
+      )}
+
+      {view.short && a.kind === "morning" && (
+        <Card className="rise text-center">
+          <p className="text-xl font-extrabold">Ihr habt genau eine Abstimmung</p>
+          <p className="text-ink-soft">
+            Verbannt ihr den Werwolf, gewinnt das Dorf. Trefft ihr jemand anderen oder könnt ihr
+            euch nicht einigen, gewinnt der Werwolf.
+          </p>
+        </Card>
       )}
 
       <ul className="space-y-2.5">
@@ -150,7 +162,15 @@ export function DiscussionPhase({ view, api, clockOffset }: PhaseProps & { clock
 
   return (
     <>
-      <Title sub="Wer von euch ist ein Werwolf? Besprecht euch!">Tag {view.round}</Title>
+      <Title
+        sub={
+          view.short
+            ? "Wer von euch ist der Werwolf? Ihr habt nur eine Abstimmung!"
+            : "Wer von euch ist ein Werwolf? Besprecht euch!"
+        }
+      >
+        Tag {view.round}
+      </Title>
       <Countdown view={view} clockOffset={clockOffset} onDone={tick} />
       <section className="space-y-2">
         <h2 className="px-1 font-extrabold text-ink-soft">Noch im Dorf ({alive.length})</h2>
@@ -208,7 +228,9 @@ export function VotePhase({ view, api }: PhaseProps) {
             ? `Gleichstand! Entscheidet euch zwischen ${(vote.candidates ?? [])
                 .map((id) => nameOf(view, id))
                 .join(" und ")}.`
-            : "Wer soll das Dorf verlassen? Alle stimmen gleichzeitig ab."
+            : view.short
+              ? "Wer ist der Werwolf? Das ist eure einzige Abstimmung."
+              : "Wer soll das Dorf verlassen? Alle stimmen gleichzeitig ab."
         }
       >
         {runoff ? "Stichwahl" : "Abstimmung"}
@@ -274,6 +296,12 @@ const ENDING: Record<Winner, { emoji: string; title: string; text: string }> = {
   niemand: { emoji: "🌫️", title: "Niemand gewinnt", text: "Es hat keiner überlebt." },
 };
 
+/** The same endings for a round that had a single wolf. */
+const LONE_WOLF_ENDING: Partial<typeof ENDING> = {
+  dorf: { emoji: "🎉", title: "Das Dorf gewinnt!", text: "Der Werwolf ist entlarvt." },
+  wolf: { emoji: "🐺", title: "Der Werwolf gewinnt!", text: "Das Dorf konnte ihn nicht aufhalten." },
+};
+
 function iWon(view: View, winner: Winner): boolean {
   const { me, lovers } = view;
   if (winner === "niemand" || !me.role) return false;
@@ -284,7 +312,8 @@ function iWon(view: View, winner: Winner): boolean {
 export function EndedPhase({ view, api }: PhaseProps) {
   if (!view.ended) return null;
   const { winner, noses } = view.ended;
-  const ending = ENDING[winner];
+  const loneWolf = view.players.filter((p) => p.role === "werwolf").length === 1;
+  const ending = (loneWolf && LONE_WOLF_ENDING[winner]) || ENDING[winner];
   const host = view.players.find((p) => p.host);
   const best = noses.filter((n) => n.hits > 0 && n.hits === noses[0].hits);
 

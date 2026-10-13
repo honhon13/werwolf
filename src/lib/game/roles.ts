@@ -1,7 +1,14 @@
 import type { RoleId, RoleSetup, Settings, Team } from "./types";
 
-export const MIN_PLAYERS = 4;
+export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 20;
+/**
+ * With exactly this many players a normal game would be over after the first
+ * night, so they play a short round instead: nobody dies at night, the seer
+ * learns who the wolf is, and a single vote decides.
+ */
+export const SHORT_ROUND_PLAYERS = 3;
+const SHORT_ROUND_ROLES: RoleId[] = ["werwolf", "seherin", "dorfbewohner"];
 
 export interface RoleInfo {
   name: string;
@@ -64,6 +71,20 @@ export const ROLES: Record<RoleId, RoleInfo> = {
   },
 };
 
+/** What the three roles of a short round do, which differs from a full game. */
+const SHORT_ROUND_TEXT: Partial<Record<RoleId, string>> = {
+  werwolf:
+    "In dieser Kurzrunde erwischst du niemanden. Am Tag gibt es genau eine Abstimmung: Wirst du nicht verbannt, hast du gewonnen. Tipp: Behaupte, du wärst die Seherin!",
+  seherin:
+    "In der Nacht siehst du die Rolle eines Mitspielers. Danach weißt du, wer der Werwolf ist. Überzeuge am Tag den Dorfbewohner davon!",
+  dorfbewohner:
+    "Du weißt nicht, wer der Werwolf ist. Am Tag erzählen dir die beiden anderen ihre Geschichte. Finde heraus, wer lügt – ihr habt nur eine Abstimmung!",
+};
+
+export function roleText(role: RoleId, short: boolean): string {
+  return (short && SHORT_ROUND_TEXT[role]) || ROLES[role].text;
+}
+
 export const ROLE_ORDER: RoleId[] = [
   "werwolf",
   "seherin",
@@ -95,6 +116,7 @@ export function composition(
   if (n < MIN_PLAYERS) {
     return { roles: null, error: `Ihr braucht mindestens ${MIN_PLAYERS} Spieler.` };
   }
+  if (n === SHORT_ROUND_PLAYERS) return { roles: [...SHORT_ROUND_ROLES], error: null };
   const setup = effectiveSetup(n, settings);
   const roles: RoleId[] = [];
   for (let i = 0; i < setup.wolves; i++) roles.push("werwolf");

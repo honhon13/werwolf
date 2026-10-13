@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ROLES } from "@/lib/game/roles";
+import { ROLES, roleText } from "@/lib/game/roles";
 import type { NightTask } from "@/lib/game/types";
 import { Avatar, Button, Card, PlayerGrid, RoleTag, Title, Waiting } from "../ui";
 import { nameOf, type PhaseProps, Spectator } from "./shared";
@@ -29,7 +29,7 @@ export function RolesPhase({ view, api }: PhaseProps) {
           <span className="flip-face flip-front flex min-h-96 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-accent bg-[#1b215a] p-6 text-center">
             <span className="text-8xl">{info.emoji}</span>
             <span className="font-display text-5xl font-extrabold text-accent">{info.name}</span>
-            <span className="text-lg leading-snug">{info.text}</span>
+            <span className="text-lg leading-snug">{roleText(view.me.role, view.short)}</span>
             <span className="font-extrabold text-accent">{info.goal}</span>
             {view.me.role === "werwolf" && (
               <span className="rounded-2xl bg-card px-3 py-2 font-bold">
@@ -62,6 +62,10 @@ const NIGHT_TEXT: Record<NightTask, { title: string; hint: string }> = {
     title: "Du schläfst tief",
     hint: "Wer könnte ein Werwolf sein? Tippe heimlich auf jemanden.",
   },
+  lurk: {
+    title: "Du lauerst im Dunkeln",
+    hint: "Heute Nacht erwischst du niemanden. Wen willst du morgen beschuldigen? Tippe heimlich.",
+  },
 };
 
 /**
@@ -74,6 +78,7 @@ export function NightPhase({ view, api }: PhaseProps) {
   if (!night) return <Spectator view={view} />;
 
   const { task } = night;
+  const text = NIGHT_TEXT[night.lurking ? "lurk" : task];
   const need = task === "amor" ? 2 : 1;
   const alive = view.players.filter((p) => p.alive);
   const targets = alive.filter((p) =>
@@ -127,7 +132,7 @@ export function NightPhase({ view, api }: PhaseProps) {
 
   return (
     <>
-      <Title sub={NIGHT_TEXT[task].hint}>{NIGHT_TEXT[task].title}</Title>
+      <Title sub={text.hint}>{text.title}</Title>
       {task === "wolf" && packSize > 1 && (
         <p className="text-center font-bold text-accent">
           {night.pick

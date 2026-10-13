@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useGameSound, useSoundSettings } from "@/lib/client/sound/useSound";
 import type { RoomApi } from "@/lib/client/useRoom";
-import { ROLES } from "@/lib/game/roles";
+import { ROLES, roleText } from "@/lib/game/roles";
 import type { Phase, View } from "@/lib/game/types";
 import { AnnouncePhase, DiscussionPhase, EndedPhase, VotePhase } from "./phases/Day";
 import { Lobby } from "./phases/Lobby";
@@ -103,7 +103,7 @@ function MyRole({ view }: { view: View }) {
       <div className="rounded-3xl border border-accent bg-card p-5 text-center">
         <p className="text-7xl">{info.emoji}</p>
         <p className="font-display text-4xl font-extrabold text-accent">{info.name}</p>
-        <p className="mt-2 text-lg leading-snug">{info.text}</p>
+        <p className="mt-2 text-lg leading-snug">{roleText(me.role, view.short)}</p>
         <p className="mt-2 font-extrabold text-accent">{info.goal}</p>
       </div>
       {me.role === "werwolf" && (

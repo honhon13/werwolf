@@ -1,4 +1,4 @@
-import { composition, MAX_PLAYERS, ROLES } from "./roles";
+import { composition, MAX_PLAYERS, ROLES, SHORT_ROUND_PLAYERS } from "./roles";
 import type {
   Action,
   Death,
@@ -56,6 +56,7 @@ export function newGame(code: string, now: number): GameState {
       discussionSeconds: 180,
     },
     phase: "lobby",
+    short: false,
     round: 0,
     acks: [],
     deadline: null,
@@ -107,7 +108,7 @@ function livingTarget(s: GameState, id: unknown): Player {
 }
 
 export function nightTask(s: GameState, p: Player): NightTask {
-  if (p.role === "werwolf") return "wolf";
+  if (p.role === "werwolf") return s.short ? "lurk" : "wolf";
   if (p.role === "seherin") return "seer";
   if (p.role === "amor" && s.round === 1) return "amor";
   return "suspect";
@@ -131,6 +132,7 @@ export function nightDone(s: GameState, p: Player): boolean {
     case "amor":
       return s.night.amorDone;
     case "suspect":
+    case "lurk":
       return p.id in s.night.suspects;
   }
 }
@@ -228,7 +230,9 @@ function resolveNight(s: GameState) {
 }
 
 function proceed(s: GameState, next: "discussion" | "night", ctx: Ctx) {
-  const winner = checkWinner(s);
+  let winner = checkWinner(s);
+  // A short round has one day only: a wolf who gets through it has won.
+  if (!winner && s.short && next === "night") winner = "wolf";
   if (winner) {
     s.winner = winner;
     s.phase = "ended";
@@ -277,6 +281,7 @@ function toLobby(s: GameState) {
     p.alive = true;
   }
   s.phase = "lobby";
+  s.short = false;
   s.round = 0;
   s.acks = [];
   s.deadline = null;
@@ -427,6 +432,7 @@ export function applyAction(
       const comp = composition(s.players.length, s.settings);
       if (!comp.roles) throw new GameError(comp.error);
       toLobby(s);
+      s.short = s.players.length === SHORT_ROUND_PLAYERS;
       const dealt = shuffle(comp.roles, ctx.rng);
       s.players.forEach((p, i) => (p.role = dealt[i]));
       s.phase = "roles";
@@ -446,6 +452,7 @@ export function applyAction(
     case "wolfVote": {
       inPhase("night");
       mustLive();
+      if (s.short) throw new GameError("In der Kurzrunde erwischt der Werwolf niemanden.");
       if (nightTask(s, me) !== "wolf") throw new GameError("Du bist kein Werwolf.");
       if (wolfConsensus(s)) throw new GameError("Ihr habt euch schon entschieden.");
       const target = livingTarget(s, action.target);
@@ -482,12 +489,14 @@ export function applyAction(
     case "suspect": {
       inPhase("night");
       mustLive();
-      if (nightTask(s, me) !== "suspect") throw new GameError("Du hast eine andere Aufgabe.");
+      const task = nightTask(s, me);
+      if (task !== "suspect" && task !== "lurk") throw new GameError("Du hast eine andere Aufgabe.");
       if (me.id in s.night.suspects) throw new GameError("Du hast schon getippt.");
       const target = livingTarget(s, action.target);
       if (target.id === me.id) throw new GameError("Dich selbst kannst du nicht verdächtigen.");
       s.night.suspects[me.id] = target.id;
-      s.suspicions.push({ round: s.round, by: me.id, target: target.id });
+      // A lurking wolf only taps along; it is not a real guess.
+      if (task === "suspect") s.suspicions.push({ round: s.round, by: me.id, target: target.id });
       break;
     }
 

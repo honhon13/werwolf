@@ -21,7 +21,8 @@ export type Phase =
 
 export type DeathCause = "wolf" | "gift" | "vote" | "jaeger" | "liebe";
 export type Winner = "dorf" | "wolf" | "paar" | "niemand";
-export type NightTask = "wolf" | "seer" | "amor" | "suspect";
+/** "lurk" is the wolf's night in a short round: a tap, but no victim. */
+export type NightTask = "wolf" | "seer" | "amor" | "suspect" | "lurk";
 
 export interface Player {
   id: string;
@@ -88,6 +89,8 @@ export interface GameState {
   players: Player[];
   settings: Settings;
   phase: Phase;
+  /** Three players: nobody dies at night and a single vote decides the game. */
+  short: boolean;
   /** Number of the current night, 0 while in the lobby. */
   round: number;
   /** Players that confirmed the current phase. */
@@ -141,6 +144,8 @@ export interface PublicPlayer {
 export interface View {
   code: string;
   phase: Phase;
+  /** In the lobby: whether starting now would give a short round. */
+  short: boolean;
   round: number;
   now: number;
   deadline: number | null;
@@ -168,7 +173,12 @@ export interface View {
   inPlay: RoleId[];
   lovers: [string, string] | null;
   night: {
-    task: NightTask;
+    /**
+     * A lurking wolf is sent as "suspect" plus `lurking`, because phones that
+     * still run an older version of the page only know the other tasks.
+     */
+    task: Exclude<NightTask, "lurk">;
+    lurking: boolean;
     pick: string | null;
     wolfVotes: Record<string, string> | null;
     amorPicked: boolean;

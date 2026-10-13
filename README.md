@@ -9,6 +9,10 @@ mit dem vierstelligen Code oder per QR-Code bei – ohne Konto.
 Werwolf, Dorfbewohner, Seherin, Hexe, Jäger und Amor. Die Rollen werden passend
 zur Spielerzahl verteilt (ab 4 Spielern) oder von der Spielleitung selbst gewählt.
 
+Zu dritt gibt es eine Kurzrunde mit Werwolf, Seherin und Dorfbewohner: In der
+Nacht scheidet niemand aus, die Seherin erfährt, wer der Werwolf ist, und am Tag
+entscheidet eine einzige Abstimmung. Wird der Werwolf nicht verbannt, gewinnt er.
+
 ## Entwickeln
 
 ```bash
