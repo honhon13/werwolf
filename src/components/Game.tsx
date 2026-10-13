@@ -72,7 +72,8 @@ function useBuzz(view: View) {
   const moment = `${view.phase}:${view.round}:${view.announce?.kind}:${view.vote?.round}`;
   const idle = view.me.done || view.phase === "lobby";
   useEffect(() => {
-    if (!idle) navigator.vibrate?.(60);
+    // Browsers refuse to vibrate before the first tap and log an error.
+    if (!idle && navigator.userActivation?.hasBeenActive) navigator.vibrate?.(60);
     // Only when the moment changes, not when the player finishes it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moment]);

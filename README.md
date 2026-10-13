@@ -17,6 +17,8 @@ pnpm dev
 ```
 
 Ohne `DATABASE_URL` liegen die Räume nur im Arbeitsspeicher des Dev-Servers.
+Nach `vercel env pull` steht die Variable in `.env.local`, dann nutzt auch der
+lokale Server die Datenbank der Live-Seite.
 Mit `DATABASE_URL` (Neon Postgres) wird die Tabelle `werwolf_rooms` beim ersten
 Zugriff angelegt; Räume werden 24 Stunden nach der letzten Änderung gelöscht.
 
