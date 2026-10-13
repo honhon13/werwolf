@@ -1,8 +1,7 @@
 export type Mood = "night" | "day";
 
-/** Seconds per quarter note. The tune is a slow waltz, three beats to a bar. */
-const BEAT = 0.72;
-const BAR = 3 * BEAT;
+/** Seconds per quarter note. The tune is a waltz; the night drags it out. */
+const BEAT: Record<Mood, number> = { night: 0.96, day: 0.72 };
 
 type Chord = "Dm" | "Bb" | "Gm" | "A" | "F" | "C";
 
@@ -45,31 +44,57 @@ const TUNE: [number, number, number][] = [
   [0, 0, 0],
 ];
 
+interface Mix {
+  pad: number;
+  /** A pad voice an octave below the chord, for weight. */
+  sub: number;
+  /** Low-pass on the pad in Hz: lower is darker. */
+  cutoff: number;
+  wind: number;
+  box: number;
+  bell: number;
+  crickets: number;
+  howls: number;
+  /** The melody is moved by this many semitones. */
+  shift: number;
+}
+
 /** How loud and how bright each layer is in the two moods. */
-const MIX: Record<Mood, { pad: number; cutoff: number; wind: number; box: number; bell: number }> = {
-  night: { pad: 0.42, cutoff: 620, wind: 0.26, box: 0.42, bell: 0.22 },
-  day: { pad: 0.26, cutoff: 1250, wind: 0, box: 0.2, bell: 0 },
+const MIX: Record<Mood, Mix> = {
+  night: { pad: 0.42, sub: 0.1, cutoff: 470, wind: 0.26, box: 0.46, bell: 0.22, crickets: 0.03, howls: 1, shift: -12 },
+  day: { pad: 0.26, sub: 0, cutoff: 1250, wind: 0, box: 0.2, bell: 0, crickets: 0, howls: 0, shift: 0 },
 };
+
+/** Seconds from nightfall to the first howl, and between howls after that. */
+const FIRST_HOWL = { after: 9, spread: 8 };
+const NEXT_HOWL = { after: 35, spread: 30 };
 
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 
 /**
  * The background music, generated on the fly: a slow pad that glides from
- * chord to chord, a music-box melody with an echo, and at night wind and a
- * distant bell. Works on any audio context, so it can be rendered offline.
+ * chord to chord and a music-box melody with an echo. The night plays it
+ * lower and slower, with wind, crickets, a distant bell and now and then a
+ * wolf howling far away. Works on any audio context, so it can be rendered
+ * offline.
  */
 export class Music {
   private readonly out: GainNode;
   private readonly padFilter: BiquadFilterNode;
   private readonly padLevel: GainNode;
   private readonly padVoices: OscillatorNode[][] = [];
+  private readonly subLevel: GainNode;
+  private readonly subVoice: OscillatorNode[];
   private readonly windLevel: GainNode;
+  private readonly cricketLevel: GainNode;
   private readonly boxLevel: GainNode;
   private readonly bellLevel: GainNode;
+  private readonly howlLevel: GainNode;
   private readonly running: AudioScheduledSourceNode[] = [];
   private mood: Mood;
   private bar = 0;
   private nextBarAt: number;
+  private nextHowlAt: number;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -79,7 +104,9 @@ export class Music {
   ) {
     this.mood = mood;
     this.nextBarAt = startAt + 0.1;
+    this.nextHowlAt = startAt + FIRST_HOWL.after + Math.random() * FIRST_HOWL.spread;
     const mix = MIX[mood];
+    const chord = VOICING[HARMONY[mood][0]];
 
     this.out = ctx.createGain();
     this.out.gain.setValueAtTime(0, startAt);
@@ -94,49 +121,62 @@ export class Music {
     this.padLevel = ctx.createGain();
     this.padLevel.gain.value = mix.pad;
     this.padFilter.connect(this.padLevel).connect(this.out);
-    const sweep = this.lfo(0.05, 140, startAt);
-    sweep.connect(this.padFilter.frequency);
-    for (const midi of VOICING[HARMONY[mood][0]]) {
+    this.lfo(0.05, 140, startAt).connect(this.padFilter.frequency);
+    const saws = (midi: number, into: AudioNode) =>
+      [-7, 7].map((cents) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = hz(midi);
+        osc.detune.value = cents;
+        osc.connect(into);
+        this.start(osc, startAt);
+        return osc;
+      });
+    for (const midi of chord) {
       const voice = ctx.createGain();
       voice.gain.value = 0.11;
       voice.connect(this.padFilter);
-      this.padVoices.push(
-        [-7, 7].map((cents) => {
-          const osc = ctx.createOscillator();
-          osc.type = "sawtooth";
-          osc.frequency.value = hz(midi);
-          osc.detune.value = cents;
-          osc.connect(voice);
-          this.start(osc, startAt);
-          return osc;
-        }),
-      );
+      this.padVoices.push(saws(midi, voice));
     }
+    this.subLevel = ctx.createGain();
+    this.subLevel.gain.value = mix.sub;
+    this.subLevel.connect(this.padFilter);
+    this.subVoice = saws(chord[0] - 12, this.subLevel);
 
     // Wind: soft noise through a band-pass that wanders up and down.
     const noise = ctx.createBufferSource();
     noise.buffer = this.noise(3);
     noise.loop = true;
-    const howl = ctx.createBiquadFilter();
-    howl.type = "bandpass";
-    howl.Q.value = 5;
-    howl.frequency.value = 620;
-    this.lfo(0.07, 260, startAt).connect(howl.frequency);
+    const whistle = ctx.createBiquadFilter();
+    whistle.type = "bandpass";
+    whistle.Q.value = 5;
+    whistle.frequency.value = 620;
+    this.lfo(0.07, 260, startAt).connect(whistle.frequency);
     const gust = ctx.createGain();
     gust.gain.value = 0.55;
     this.lfo(0.11, 0.4, startAt).connect(gust.gain);
     this.windLevel = ctx.createGain();
     this.windLevel.gain.value = mix.wind;
-    noise.connect(howl).connect(gust).connect(this.windLevel).connect(this.out);
+    noise.connect(whistle).connect(gust).connect(this.windLevel).connect(this.out);
     this.start(noise, startAt);
 
-    // Music box and bell share an echo that makes the room feel large.
+    const chirping = ctx.createBufferSource();
+    chirping.buffer = this.crickets(9);
+    chirping.loop = true;
+    this.cricketLevel = ctx.createGain();
+    this.cricketLevel.gain.value = mix.crickets;
+    chirping.connect(this.cricketLevel).connect(this.out);
+    this.start(chirping, startAt);
+
+    // Music box, bell and howls share an echo that makes the night feel wide.
     this.boxLevel = ctx.createGain();
     this.boxLevel.gain.value = mix.box;
     this.bellLevel = ctx.createGain();
     this.bellLevel.gain.value = mix.bell;
+    this.howlLevel = ctx.createGain();
+    this.howlLevel.gain.value = mix.howls;
     const echo = ctx.createDelay(1);
-    echo.delayTime.value = BEAT * 0.75;
+    echo.delayTime.value = 0.54;
     const feedback = ctx.createGain();
     feedback.gain.value = 0.38;
     const damp = ctx.createBiquadFilter();
@@ -146,37 +186,50 @@ export class Music {
     wet.gain.value = 0.45;
     echo.connect(damp).connect(feedback).connect(echo);
     damp.connect(wet).connect(this.out);
-    for (const dry of [this.boxLevel, this.bellLevel]) {
+    for (const dry of [this.boxLevel, this.bellLevel, this.howlLevel]) {
       dry.connect(this.out);
       dry.connect(echo);
     }
   }
 
-  /** Cross-fades the layers to another mood; the chords follow at the next bar. */
+  /** Cross-fades the layers to another mood; chords and tempo follow at the next bar. */
   setMood(mood: Mood, at: number) {
+    if (mood === "night" && this.mood !== "night") {
+      this.nextHowlAt = at + FIRST_HOWL.after + Math.random() * FIRST_HOWL.spread;
+    }
     this.mood = mood;
     const mix = MIX[mood];
-    this.padLevel.gain.setTargetAtTime(mix.pad, at, 0.9);
-    this.padFilter.frequency.setTargetAtTime(mix.cutoff, at, 0.9);
-    this.windLevel.gain.setTargetAtTime(mix.wind, at, 0.9);
-    this.boxLevel.gain.setTargetAtTime(mix.box, at, 0.9);
-    this.bellLevel.gain.setTargetAtTime(mix.bell, at, 0.9);
+    const fade = (param: AudioParam, value: number) => param.setTargetAtTime(value, at, 0.9);
+    fade(this.padLevel.gain, mix.pad);
+    fade(this.subLevel.gain, mix.sub);
+    fade(this.padFilter.frequency, mix.cutoff);
+    fade(this.windLevel.gain, mix.wind);
+    fade(this.cricketLevel.gain, mix.crickets);
+    fade(this.boxLevel.gain, mix.box);
+    fade(this.bellLevel.gain, mix.bell);
+    fade(this.howlLevel.gain, mix.howls);
   }
 
   /** Queues every bar that starts before `until`. Call this regularly. */
   schedule(until: number) {
     while (this.nextBarAt < until) {
       const at = this.nextBarAt;
+      const beat = BEAT[this.mood];
+      const night = this.mood === "night";
       const chord = VOICING[HARMONY[this.mood][this.bar]];
-      this.padVoices.forEach((voice, i) => {
-        for (const osc of voice) osc.frequency.setTargetAtTime(hz(chord[i]), at, 0.22);
-      });
-      TUNE[this.bar].forEach((midi, beat) => {
-        if (midi) this.chime(hz(midi), at + beat * BEAT);
+      const glide = (osc: OscillatorNode, midi: number) => osc.frequency.setTargetAtTime(hz(midi), at, 0.22);
+      this.padVoices.forEach((voice, i) => voice.forEach((osc) => glide(osc, chord[i])));
+      this.subVoice.forEach((osc) => glide(osc, chord[0] - 12));
+      TUNE[this.bar].forEach((midi, i) => {
+        if (midi) this.chime(hz(midi + MIX[this.mood].shift), at + i * beat, night);
       });
       if (this.bar === 0) this.toll(hz(62), at);
+      if (night && at >= this.nextHowlAt) {
+        this.pack(at + Math.random() * 3 * beat);
+        this.nextHowlAt = at + NEXT_HOWL.after + Math.random() * NEXT_HOWL.spread;
+      }
       this.bar = (this.bar + 1) % TUNE.length;
-      this.nextBarAt += BAR;
+      this.nextBarAt += 3 * beat;
     }
   }
 
@@ -205,14 +258,48 @@ export class Music {
     return amount;
   }
 
+  private buffer(seconds: number): AudioBuffer {
+    return this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * seconds), this.ctx.sampleRate);
+  }
+
   /** A few seconds of soft, low-heavy noise to loop. */
   private noise(seconds: number): AudioBuffer {
-    const buffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * seconds), this.ctx.sampleRate);
+    const buffer = this.buffer(seconds);
     const data = buffer.getChannelData(0);
     let last = 0;
     for (let i = 0; i < data.length; i++) {
       last = (last + 0.04 * (Math.random() * 2 - 1)) / 1.04;
       data[i] = last * 9;
+    }
+    return buffer;
+  }
+
+  /**
+   * A loop of three crickets, each with its own pitch and pace. A chirp is
+   * three quick pulses of a high tone, and now and then a cricket rests.
+   */
+  private crickets(seconds: number): AudioBuffer {
+    const buffer = this.buffer(seconds);
+    const data = buffer.getChannelData(0);
+    const rate = buffer.sampleRate;
+    const pulse = Math.floor(0.02 * rate);
+    for (const [pitch, every, loudness] of [
+      [4350, 0.62, 1],
+      [4900, 0.47, 0.55],
+      [3980, 0.83, 0.4],
+    ]) {
+      // Stops early enough that no chirp is cut off where the loop repeats.
+      for (let t = Math.random() * every; t < seconds - 0.12; ) {
+        for (let k = 0; k < 3; k++) {
+          const from = Math.floor((t + k * 0.032) * rate);
+          for (let i = 0; i < pulse; i++) {
+            const swell = Math.sin((Math.PI * i) / pulse) ** 2;
+            data[from + i] += loudness * swell * Math.sin((2 * Math.PI * pitch * i) / rate);
+          }
+        }
+        const rest = Math.random() < 0.08 ? 1 + Math.random() * 1.5 : 0;
+        t += every * (0.92 + Math.random() * 0.16) + rest;
+      }
     }
     return buffer;
   }
@@ -230,11 +317,14 @@ export class Music {
     osc.stop(at + decay + 0.05);
   }
 
-  /** A music-box note: a clear tone with a short glassy overtone on top. */
-  private chime(freq: number, at: number) {
-    this.partial(this.boxLevel, freq, at, 0.5, 1.9);
-    this.partial(this.boxLevel, freq * 2.003, at, 0.16, 1.0);
-    this.partial(this.boxLevel, freq * 4.2, at, 0.05, 0.25);
+  /**
+   * A music-box note. By day it has a short glassy overtone on top; the dark
+   * version leaves that out and rings longer.
+   */
+  private chime(freq: number, at: number, dark: boolean) {
+    this.partial(this.boxLevel, freq, at, 0.5, dark ? 2.8 : 1.9);
+    this.partial(this.boxLevel, freq * 2.003, at, dark ? 0.2 : 0.16, dark ? 1.4 : 1.0);
+    if (!dark) this.partial(this.boxLevel, freq * 4.2, at, 0.05, 0.25);
   }
 
   /** A distant church bell, with the minor-third overtone bells have. */
@@ -251,5 +341,63 @@ export class Music {
     for (const [ratio, peak, decay] of partials) {
       this.partial(this.bellLevel, freq * ratio, at, peak, decay);
     }
+  }
+
+  /** One wolf howls, and often a second one answers a moment later. */
+  private pack(at: number) {
+    this.howl(at, hz(62), hz(69), 0.04);
+    if (Math.random() < 0.6) {
+      const answer = at + 1.5 + Math.random() * 0.9;
+      if (Math.random() < 0.5) this.howl(answer, hz(57), hz(65), 0.027);
+      else this.howl(answer, hz(65), hz(74), 0.023);
+    }
+  }
+
+  /**
+   * A howl: the pitch climbs from `from` to `to`, hangs there with a slight
+   * tremble and sinks again. Muffled, so that it seems to come from far away.
+   */
+  private howl(at: number, from: number, to: number, level: number) {
+    const length = 4.2 + Math.random() * 1.2;
+    const risen = at + 0.9;
+    const held = at + length * 0.62;
+    const end = at + length;
+    const tune = 1 + (Math.random() - 0.5) * 0.03;
+
+    // Fades slowly at first, so that the sinking pitch is still heard.
+    const voice = this.ctx.createGain();
+    voice.gain.setValueAtTime(0, at);
+    voice.gain.linearRampToValueAtTime(level, at + 0.7);
+    voice.gain.setValueAtTime(level, held);
+    voice.gain.linearRampToValueAtTime(level * 0.4, held + (end - held) * 0.65);
+    voice.gain.exponentialRampToValueAtTime(0.0001, end);
+    const far = this.ctx.createBiquadFilter();
+    far.type = "lowpass";
+    far.frequency.value = 900;
+    voice.connect(far).connect(this.howlLevel);
+
+    const tremble = this.ctx.createOscillator();
+    tremble.frequency.value = 5.5;
+    tremble.start(risen);
+    tremble.stop(end + 0.05);
+
+    // The fundamental and two fainter overtones follow the same curve.
+    [1, 0.3, 0.1].forEach((share, i) => {
+      const harmonic = (i + 1) * tune;
+      const osc = this.ctx.createOscillator();
+      osc.frequency.setValueAtTime(from * harmonic, at);
+      osc.frequency.exponentialRampToValueAtTime(to * harmonic, risen);
+      osc.frequency.linearRampToValueAtTime(to * 1.03 * harmonic, held);
+      osc.frequency.exponentialRampToValueAtTime(to * 0.78 * harmonic, end);
+      const depth = this.ctx.createGain();
+      depth.gain.setValueAtTime(0, risen);
+      depth.gain.linearRampToValueAtTime(4 * harmonic, risen + 0.9);
+      tremble.connect(depth).connect(osc.frequency);
+      const part = this.ctx.createGain();
+      part.gain.value = share;
+      osc.connect(part).connect(voice);
+      osc.start(at);
+      osc.stop(end + 0.05);
+    });
   }
 }
