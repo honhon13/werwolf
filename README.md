@@ -1,0 +1,37 @@
+# Werwolf
+
+Das Werwolf-Spiel fürs Handy: Jeder spielt auf seinem eigenen Gerät, die App
+übernimmt die Spielleitung. Ein Kind macht einen Raum auf, die anderen treten
+mit dem vierstelligen Code oder per QR-Code bei – ohne Konto.
+
+## Rollen
+
+Werwolf, Dorfbewohner, Seherin, Hexe, Jäger und Amor. Die Rollen werden passend
+zur Spielerzahl verteilt (ab 4 Spielern) oder von der Spielleitung selbst gewählt.
+
+## Entwickeln
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Ohne `DATABASE_URL` liegen die Räume nur im Arbeitsspeicher des Dev-Servers.
+Mit `DATABASE_URL` (Neon Postgres) wird die Tabelle `werwolf_rooms` beim ersten
+Zugriff angelegt; Räume werden 24 Stunden nach der letzten Änderung gelöscht.
+
+```bash
+pnpm test   # Spielregeln, inklusive hunderter Zufallspartien
+pnpm lint
+```
+
+## Aufbau
+
+- `src/lib/game` – die Spielregeln als reine Funktionen (`engine.ts`) und was
+  jeder Spieler sehen darf (`view.ts`). Geheimes verlässt den Server nie.
+- `src/lib/server` – Speicherung der Räume und Hilfen für die API.
+- `src/app/api/rooms` – Raum anlegen, beitreten, Stand abfragen, Aktion senden.
+- `src/components` – die Bildschirme der einzelnen Spielphasen.
+
+Die Handys fragen den Spielstand alle 1,5 Sekunden ab, solange die Seite
+sichtbar ist.

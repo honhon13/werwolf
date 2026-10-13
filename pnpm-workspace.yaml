@@ -1,0 +1,6 @@
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@typescript-eslint/parser@8.71.2'
+  - '@typescript-eslint/visitor-keys@8.71.2'
