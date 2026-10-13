@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { speak, useNarrator } from "@/lib/client/narrator";
-import { store, useStored } from "@/lib/client/storage";
+import { useGameSound, useSoundSettings } from "@/lib/client/sound/useSound";
 import type { RoomApi } from "@/lib/client/useRoom";
 import { ROLES } from "@/lib/game/roles";
 import type { Phase, View } from "@/lib/game/types";
@@ -147,11 +146,12 @@ type Panel = "menu" | "rules" | "role" | null;
 export function Game({ view, clockOffset, api }: { view: View; clockOffset: number; api: RoomApi }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>(null);
-  const voice = useStored("voice") === "1";
+  const audio = useSoundSettings();
   const playing = view.phase !== "lobby";
+  const sky = skyFor(view);
   const { error, clearError } = api;
 
-  useNarrator(view, voice);
+  useGameSound(view, sky);
   useWakeLock(playing);
   useBuzz(view);
 
@@ -176,7 +176,7 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
 
   const phaseProps = { view, api };
   return (
-    <div className="sky" data-sky={skyFor(view)}>
+    <div className="sky" data-sky={sky}>
       <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <nav className="flex items-center justify-between gap-2">
           {playing && view.me.role ? (
@@ -195,14 +195,25 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
           <span className="text-sm font-extrabold tracking-wide text-ink-soft uppercase">
             {PHASE_LABEL[view.phase](view)}
           </span>
-          <button
-            type="button"
-            onClick={() => setPanel("menu")}
-            aria-label="Menü"
-            className="grid size-11 place-items-center rounded-full border border-line bg-card text-xl"
-          >
-            ☰
-          </button>
+          <span className="flex gap-2">
+            <button
+              type="button"
+              onClick={audio.toggle}
+              aria-pressed={audio.on}
+              aria-label={audio.on ? "Ton ausschalten" : "Ton einschalten"}
+              className="grid size-11 place-items-center rounded-full border border-line bg-card text-xl"
+            >
+              {audio.on ? "🔊" : "🔇"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPanel("menu")}
+              aria-label="Menü"
+              className="grid size-11 place-items-center rounded-full border border-line bg-card text-xl"
+            >
+              ☰
+            </button>
+          </span>
         </nav>
 
         {/* The key resets picked players whenever the game moves on. */}
@@ -254,18 +265,22 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
             <Button variant="quiet" onClick={() => setPanel("rules")}>
               📖 Spielregeln
             </Button>
-            <Button
-              variant="quiet"
-              aria-pressed={voice}
-              onClick={() => {
-                store("voice", voice ? null : "1");
-                if (!voice) speak("Die Erzählerstimme ist jetzt an.");
-              }}
-            >
-              {voice ? "🔊 Erzählerstimme: an" : "🔇 Erzählerstimme: aus"}
-            </Button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button variant="quiet" aria-pressed={audio.on} onClick={audio.toggle}>
+                {audio.on ? "🔊 Ton: an" : "🔇 Ton: aus"}
+              </Button>
+              <Button
+                variant="quiet"
+                aria-pressed={audio.music}
+                disabled={!audio.on}
+                onClick={audio.toggleMusic}
+              >
+                {audio.music ? "🎵 Musik: an" : "🎵 Musik: aus"}
+              </Button>
+            </div>
             <p className="px-1 text-sm text-ink-soft">
-              Sitzt ihr zusammen, schaltet die Stimme am besten nur auf einem Handy ein.
+              Der Ton bringt Erzähler und Musik. Sitzt ihr zusammen, schaltet ihn am besten nur auf
+              einem Handy ein.
             </p>
             {view.me.host && playing && view.phase !== "ended" && (
               <>

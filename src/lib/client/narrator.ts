@@ -1,6 +1,3 @@
-"use client";
-
-import { useEffect, useRef } from "react";
 import { ROLES } from "../game/roles";
 import type { DeathCause, View } from "../game/types";
 
@@ -30,7 +27,7 @@ export function narration(view: View): string {
     case "roles":
       return "Schaut euch heimlich eure Rolle an.";
     case "night":
-      return `Es wird Nacht im Dorf. Alle schließen die Augen. Jeder hat nun heimlich eine Aufgabe auf seinem Handy.`;
+      return "Es wird Nacht im Dorf. Schaut auf euer Handy: Jeder hat jetzt eine geheime Aufgabe.";
     case "witch":
       return "Die Hexe erwacht.";
     case "announce": {
@@ -70,38 +67,4 @@ export function narration(view: View): string {
     default:
       return "";
   }
-}
-
-export function speak(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
-  const synth = window.speechSynthesis;
-  synth.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "de-DE";
-  utterance.rate = 0.95;
-  const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("de"));
-  if (voice) utterance.voice = voice;
-  synth.speak(utterance);
-}
-
-/** Reads the story aloud whenever the game moves on. */
-export function useNarrator(view: View, enabled: boolean) {
-  const moment = [
-    view.phase,
-    view.round,
-    view.announce?.kind,
-    view.vote?.round,
-  ].join(":");
-  const text = narration(view);
-  const spoken = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!enabled) {
-      spoken.current = moment;
-      return;
-    }
-    if (spoken.current === moment) return;
-    spoken.current = moment;
-    speak(text);
-  }, [moment, text, enabled]);
 }

@@ -27,6 +27,19 @@ pnpm test   # Spielregeln, inklusive hunderter Zufallspartien
 pnpm lint
 ```
 
+## Ton
+
+Mit dem Lautsprecher-Knopf schaltet jedes Handy Erzähler und Musik ein oder aus;
+die Musik lässt sich im Menü getrennt abstellen.
+
+- **Erzähler:** Aufnahmen liegen in `public/audio/sprache/`. Die Dateinamen und
+  die Texte dazu stehen in [SPRECHTEXTE.md](SPRECHTEXTE.md). Leere Dateien sind
+  Platzhalter; für sie liest die Stimme des Geräts den Text vor. Welche
+  Aufnahmen es gibt, wird beim Start von `pnpm dev` und beim Build festgestellt,
+  nach dem Ablegen neuer Dateien also den Dev-Server neu starten.
+- **Musik:** wird im Browser erzeugt (`src/lib/client/sound/music.ts`), es gibt
+  keine Musikdatei. Melodie, Akkorde und Lautstärken stehen oben in der Datei.
+
 ## Aufbau
 
 - `src/lib/game` – die Spielregeln als reine Funktionen (`engine.ts`) und was
@@ -34,6 +47,7 @@ pnpm lint
 - `src/lib/server` – Speicherung der Räume und Hilfen für die API.
 - `src/app/api/rooms` – Raum anlegen, beitreten, Stand abfragen, Aktion senden.
 - `src/components` – die Bildschirme der einzelnen Spielphasen.
+- `src/lib/client/sound` – Erzähler-Aufnahmen, Ersatzstimme und Musik.
 
 Die Handys fragen den Spielstand alle 1,5 Sekunden ab, solange die Seite
 sichtbar ist.
