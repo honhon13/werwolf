@@ -40,20 +40,61 @@ describe("clipFor", () => {
     expect(clipFor(see(s, "p3"))).toBe("nacht");
   });
 
-  it("knows the endings that have a recording", () => {
+  it("has a recording for every ending", () => {
     const base = see(game(["werwolf", D, D, D, D]), "p1");
     const ended = (winner: NonNullable<View["ended"]>["winner"]): View => ({
       ...base,
       phase: "ended",
       ended: { winner, winners: [], noses: [], center: [] },
     });
-    expect(["dorf", "wolf", "paar", "niemand", "engel"].map((w) => clipFor(ended(w as never)))).toEqual([
+    const winners = ["dorf", "wolf", "paar", "niemand", "floetenspieler", "weisserWolf", "engel"] as const;
+    expect(winners.map((w) => clipFor(ended(w)))).toEqual([
       "siegDorf",
       "siegWerwoelfe",
       "siegLiebespaar",
       "siegNiemand",
-      null,
+      "siegFloetenspieler",
+      "siegWeisserWerwolf",
+      "siegEngel",
     ]);
+  });
+
+  it("follows the Hauptmann from the election to his successor", () => {
+    let s = game(["werwolf", D, D, D, D, D], { captain: true });
+    s = night(s, "p0", "wolf", { targets: ["p5"] });
+    s = ackAll(s);
+    expect(clipFor(see(s, "p1"))).toBe("hauptmannwahl");
+    s = votes(s, { p0: "p1", p1: "p1", p2: "p2", p3: "p2", p4: null });
+    expect(clipFor(see(s, "p1"))).toBe("stichwahl");
+    s = votes(s, { p0: "p1", p1: "p1", p2: "p1", p3: "p2", p4: "p2" });
+    expect(clipFor(see(s, "p1"))).toBe("hauptmannGewaehlt");
+    s = ackAll(ackAll(s));
+    s = votes(s, { p0: "p1", p1: "p0", p2: "p1", p3: "p1", p4: "p1" });
+    expect(clipFor(see(s, "p2"))).toBe("urteilVerbannt");
+    s = ackAll(s);
+    expect(clipFor(see(s, "p2"))).toBe("hauptmannNachfolge");
+    s = act(s, "p1", { type: "choose", targets: ["p2"] });
+    expect(clipFor(see(s, "p2"))).toBe("hauptmannNeu");
+  });
+
+  it("lets the Sündenbock speak after a tie", () => {
+    let s = game(["werwolf", "suendenbock", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = toVote(s);
+    s = votes(s, { p0: "p2", p1: "p3", p2: "p3", p3: "p2" });
+    expect(clipFor(see(s, "p2"))).toBe("urteilVerbannt");
+    s = ackAll(s);
+    expect(clipFor(see(s, "p2"))).toBe("suendenbock");
+    s = act(s, "p1", { type: "choose", targets: ["p2", "p3"] });
+    expect(clipFor(see(s, "p2"))).toBe("suendenbockEntschieden");
+  });
+
+  it("has its own recording for the Dorfdepp who stays", () => {
+    let s = game(["werwolf", "idiot", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = toVote(s);
+    s = votes(s, { p0: "p1", p1: "p0", p2: "p1", p3: "p1" });
+    expect(clipFor(see(s, "p2"))).toBe("urteilDorfdepp");
   });
 
   it("plays the Jäger before and after his shot", () => {

@@ -22,6 +22,16 @@ export const CLIPS = {
   siegWerwoelfe: "15-sieg-werwoelfe",
   siegLiebespaar: "16-sieg-liebespaar",
   siegNiemand: "17-sieg-niemand",
+  siegFloetenspieler: "18-sieg-floetenspieler",
+  siegWeisserWerwolf: "19-sieg-weisser-werwolf",
+  siegEngel: "20-sieg-engel",
+  hauptmannwahl: "21-hauptmannwahl",
+  hauptmannGewaehlt: "22-hauptmann-gewaehlt",
+  hauptmannNachfolge: "23-hauptmann-nachfolge",
+  hauptmannNeu: "24-hauptmann-neu",
+  suendenbock: "25-suendenbock",
+  suendenbockEntschieden: "26-suendenbock-entschieden",
+  urteilDorfdepp: "27-urteil-dorfdepp",
 } as const;
 
 export type ClipId = keyof typeof CLIPS;
@@ -59,15 +69,26 @@ export function clipFor(view: View): ClipId | null {
         case "hunter":
           return "jaegerSchuss";
         case "verdict":
-          // A Dorfdepp who stays is neither of the two recordings.
-          if (a.exposed) return null;
+          if (a.exposed) return "urteilDorfdepp";
           return nobody ? "urteilNiemand" : "urteilVerbannt";
+        case "election":
+          return "hauptmannGewaehlt";
+        case "succession":
+          return "hauptmannNeu";
+        case "scapegoat":
+          return "suendenbockEntschieden";
         default:
           return null;
       }
     }
     case "hunter":
       return "jaeger";
+    case "succession":
+      return "hauptmannNachfolge";
+    case "scapegoat":
+      return "suendenbock";
+    case "election":
+      return view.vote?.round === 2 ? "stichwahl" : "hauptmannwahl";
     case "discussion":
       return "diskussion";
     case "vote":
@@ -82,6 +103,12 @@ export function clipFor(view: View): ClipId | null {
           return "siegLiebespaar";
         case "niemand":
           return "siegNiemand";
+        case "floetenspieler":
+          return "siegFloetenspieler";
+        case "weisserWolf":
+          return "siegWeisserWerwolf";
+        case "engel":
+          return "siegEngel";
         default:
           return null;
       }

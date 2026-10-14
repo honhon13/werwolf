@@ -16,6 +16,11 @@ const body = Nunito({
 export const metadata: Metadata = {
   title: "Werwolf",
   description: "Das Werwolf-Spiel für die ganze Familie – jeder spielt auf seinem Handy.",
+  // Setting icons here replaces the link Next.js makes for app/icon.png, so it is listed too.
+  icons: {
+    icon: [{ url: "/icon.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: { capable: true, title: "Werwolf", statusBarStyle: "black-translucent" },
   robots: { index: false, follow: false },
 };

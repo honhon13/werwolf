@@ -23,7 +23,10 @@ class SoundEngine {
   private awake = false;
   private readonly clips = new Map<ClipId, Promise<ArrayBuffer | null>>();
   private voice: AudioBufferSourceNode | null = null;
-  /** Counts narrations, so a slow one cannot talk over a newer one. */
+  /**
+   * Goes up whenever the narrator is silenced, so a narration that is still
+   * loading cannot start after a newer one or after the sound was turned off.
+   */
   private turn = 0;
 
   /** Starts or resumes audio. Must run inside a tap or click handler. */
@@ -61,8 +64,8 @@ class SoundEngine {
 
   /** Plays a narrator recording, or reads `fallback` if there is none. */
   async narrate(id: ClipId, fallback: string) {
-    const turn = ++this.turn;
     this.hush();
+    const turn = this.turn;
     const ctx = this.ctx;
     if (!ctx || !this.voiceBus || ctx.state !== "running") return;
 
@@ -89,9 +92,10 @@ class SoundEngine {
       } catch {
         // Not a format this browser can play: treat it like a missing file.
         this.clips.set(id, Promise.resolve(null));
+        if (turn !== this.turn) return;
       }
     }
-    this.speak(fallback);
+    this.speak(fallback, turn);
   }
 
   private build() {
@@ -164,12 +168,22 @@ class SoundEngine {
     this.musicBus.gain.setTargetAtTime(down ? DUCKED : 1, this.ctx.currentTime, down ? 0.08 : 0.5);
   }
 
-  /** Stops whatever the narrator is saying right now. */
+  /**
+   * Stops whatever the narrator is saying right now, and any recording that
+   * is still loading, so there is never more than one voice at a time.
+   */
   private hush() {
-    if (this.voice) {
-      this.voice.onended = null;
-      this.voice.stop();
-      this.voice = null;
+    this.turn += 1;
+    const voice = this.voice;
+    this.voice = null;
+    if (voice) {
+      voice.onended = null;
+      try {
+        voice.stop();
+      } catch {
+        // Some browsers throw when a source has already ended.
+      }
+      voice.disconnect();
     }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -177,7 +191,7 @@ class SoundEngine {
     this.duck(false);
   }
 
-  private speak(text: string) {
+  private speak(text: string, turn: number) {
     if (!("speechSynthesis" in window) || !text) return;
     const synth = window.speechSynthesis;
     const line = new SpeechSynthesisUtterance(text);
@@ -185,8 +199,13 @@ class SoundEngine {
     line.rate = 0.95;
     const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("de"));
     if (voice) line.voice = voice;
-    line.onstart = () => this.duck(true);
-    line.onend = line.onerror = () => this.duck(false);
+    // A cancelled line still reports its end; it must not touch a newer one.
+    line.onstart = () => {
+      if (turn === this.turn) this.duck(true);
+    };
+    line.onend = line.onerror = () => {
+      if (turn === this.turn) this.duck(false);
+    };
     synth.speak(line);
   }
 

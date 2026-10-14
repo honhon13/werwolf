@@ -69,7 +69,7 @@ export function narration(view: View): string {
     case "scapegoat":
       return "Der Sündenbock bestimmt, wer morgen abstimmen darf.";
     case "election":
-      return "Wählt euren Hauptmann!";
+      return view.vote?.round === 2 ? "Gleichstand! Es gibt eine Stichwahl." : "Wählt euren Hauptmann!";
     case "discussion":
       return "Wer von euch ist ein Werwolf? Besprecht euch!";
     case "vote":

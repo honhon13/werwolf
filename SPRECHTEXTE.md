@@ -39,13 +39,30 @@ also nach und nach aufnehmen, das Spiel funktioniert die ganze Zeit.
 | 8 | `08-jaeger-schuss` | der Jäger geschossen hat |
 | 9 | `09-diskussion` | die Beratung am Tag beginnt |
 | 10 | `10-abstimmung` | die Abstimmung beginnt |
-| 11 | `11-stichwahl` | es Gleichstand gibt und noch einmal gewählt wird |
-| 12 | `12-urteil-verbannt` | nach der Abstimmung jemand gehen muss |
+| 11 | `11-stichwahl` | es Gleichstand gibt und noch einmal gewählt wird – bei der Abstimmung und bei der Hauptmannwahl |
+| 12 | `12-urteil-verbannt` | nach der Abstimmung jemand gehen muss (auch der Sündenbock) |
 | 13 | `13-urteil-niemand` | nach der Abstimmung niemand gehen muss |
 | 14 | `14-sieg-dorf` | das Dorf gewonnen hat |
 | 15 | `15-sieg-werwoelfe` | die Werwölfe gewonnen haben |
 | 16 | `16-sieg-liebespaar` | das Liebespaar gewonnen hat |
 | 17 | `17-sieg-niemand` | niemand überlebt hat |
+| 18 | `18-sieg-floetenspieler` | der Flötenspieler gewonnen hat |
+| 19 | `19-sieg-weisser-werwolf` | der Weiße Werwolf gewonnen hat |
+| 20 | `20-sieg-engel` | der Engel gewonnen hat |
+| 21 | `21-hauptmannwahl` | am ersten Tag der Hauptmann gewählt wird |
+| 22 | `22-hauptmann-gewaehlt` | das Ergebnis der Hauptmannwahl feststeht |
+| 23 | `23-hauptmann-nachfolge` | der Hauptmann ausgeschieden ist und einen Nachfolger bestimmt |
+| 24 | `24-hauptmann-neu` | der Nachfolger feststeht |
+| 25 | `25-suendenbock` | der Sündenbock gehen musste und bestimmt, wer morgen abstimmt |
+| 26 | `26-suendenbock-entschieden` | der Sündenbock sich entschieden hat |
+| 27 | `27-urteil-dorfdepp` | das Dorf den Dorfdepp verbannen wollte und er bleiben darf |
+
+Die Dateien 18 bis 27 sind noch leere Platzhalter.
+
+**Bewusst ohne Ansage:** die weiteren Schritte der Nacht nach dem Einschlafen
+(außer der Hexe) – sonst würde man hören, welche Rollen noch im Spiel sind.
+Hinweise wie das Brummen des Bären oder die Feder des Raben stehen nur auf dem
+Bildschirm, weil zu jedem Moment genau eine Aufnahme gehört.
 
 ## Die Texte
 
@@ -168,3 +185,75 @@ also nach und nach aufnehmen, das Spiel funktioniert die ganze Zeit.
 
 > Stille liegt über dem Dorf. Kein Mensch und kein Werwolf ist mehr da. Diese
 > Runde hat keinen Sieger.
+
+### 18 · `18-sieg-floetenspieler.m4a`
+
+*Verträumt, fast singend.*
+
+> Hört ihr das? Eine leise Melodie zieht durch die Gassen … und das ganze Dorf
+> tanzt im Takt. Alle sind verzaubert. Der Flötenspieler hat gewonnen!
+
+### 19 · `19-sieg-weisser-werwolf.m4a`
+
+*Kalt und ruhig.*
+
+> Das Rudel ist verschwunden. Nur einer hat das von Anfang an geplant: der Weiße
+> Werwolf. Er hat Dorf und Wölfe getäuscht und gewinnt ganz allein!
+
+### 20 · `20-sieg-engel.m4a`
+
+*Hell und staunend.*
+
+> Was für eine Überraschung! Der Engel wollte gar nicht im Dorf bleiben – er
+> wollte so schnell wie möglich zurück in den Himmel. Und das hat geklappt: Der
+> Engel hat gewonnen!
+
+### 21 · `21-hauptmannwahl.m4a`
+
+*Feierlich.*
+
+> Bevor es richtig losgeht, braucht das Dorf einen Hauptmann. Bei jeder
+> Abstimmung zählt seine Stimme doppelt. Wählt jetzt auf eurem Handy – ihr dürft
+> auch euch selbst wählen.
+
+### 22 · `22-hauptmann-gewaehlt.m4a`
+
+*Feierlich, am Ende fröhlich.*
+
+> Das Dorf hat gewählt! Ab jetzt gibt es einen Hauptmann. Schaut auf euer Handy,
+> wer es geworden ist.
+
+### 23 · `23-hauptmann-nachfolge.m4a`
+
+*Ernst und würdevoll.*
+
+> Der Hauptmann muss das Dorf verlassen. Doch bevor er geht, gibt er sein Amt
+> weiter. Hauptmann, wer soll das Dorf jetzt anführen?
+
+### 24 · `24-hauptmann-neu.m4a`
+
+*Ruhig.*
+
+> Das Dorf hat einen neuen Hauptmann. Schaut auf euer Handy, wer es ist.
+
+### 25 · `25-suendenbock.m4a`
+
+*Mitleidig.*
+
+> Gleichstand! Und wie immer muss dann der Sündenbock dran glauben … Doch bevor er
+> geht, darf er bestimmen, wer morgen mit abstimmen darf.
+
+### 26 · `26-suendenbock-entschieden.m4a`
+
+*Kurz und knapp.*
+
+> Der Sündenbock hat entschieden. Schaut auf euer Handy, wer morgen abstimmen
+> darf.
+
+### 27 · `27-urteil-dorfdepp.m4a`
+
+*Erst ernst, dann lachend.*
+
+> Das Dorf hat entschieden … doch Moment! Das ist ja der Dorfdepp! Den kann man
+> doch nicht wegschicken. Er darf bleiben – aber abstimmen darf er ab jetzt nicht
+> mehr.
