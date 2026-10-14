@@ -22,7 +22,7 @@ function JoinForm({ code, api }: { code: string; api: ReturnType<typeof useRoom>
   const [typed, setTyped] = useState<string | null>(null);
   const name = typed ?? remembered ?? "";
   if (api.room.status !== "guest") return null;
-  const { phase, players } = api.room;
+  const { phase, players, seats, waiting } = api.room;
 
   return (
     <Splash>
@@ -49,12 +49,38 @@ function JoinForm({ code, api }: { code: string; api: ReturnType<typeof useRoom>
           </Button>
           {api.error && <p className="font-bold text-danger">{api.error}</p>}
         </form>
-      ) : (
-        <Card>
-          <p className="text-lg font-bold">Hier läuft gerade eine Runde.</p>
-          <p className="mt-1 text-ink-soft">
-            Sobald sie vorbei ist, kannst du mitspielen. Diese Seite merkt das von selbst.
+      ) : waiting ? (
+        <Card className="space-y-3">
+          <p className="text-lg font-bold">Warte auf die Spielleitung …</p>
+          <p className="text-ink-soft">
+            Sie muss bestätigen, dass du {waiting} bist. Danach geht es auf diesem Gerät weiter.
           </p>
+          <Button variant="quiet" onClick={api.cancelRejoin}>
+            Abbrechen
+          </Button>
+        </Card>
+      ) : (
+        <Card className="space-y-3">
+          <p className="text-lg font-bold">Hier läuft gerade eine Runde.</p>
+          <p className="text-ink-soft">
+            Warst du schon dabei und hast das Gerät gewechselt? Tippe auf deinen Namen – die
+            Spielleitung lässt dich wieder hinein. Sonst kannst du bei der nächsten Runde mitspielen.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {seats.map((seat) => (
+              <Button
+                key={seat.id}
+                variant="quiet"
+                className="min-h-12 text-base"
+                disabled={api.busy}
+                onClick={() => void api.rejoin(seat)}
+              >
+                {seat.name}
+                {!seat.online && <span className="block text-xs font-bold text-ink-soft">offline</span>}
+              </Button>
+            ))}
+          </div>
+          {api.error && <p className="font-bold text-danger">{api.error}</p>}
         </Card>
       )}
       <Link href="/" className="font-bold text-ink-soft underline underline-offset-4">

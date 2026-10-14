@@ -1,25 +1,40 @@
-import { composition, MAX_PLAYERS, ROLES, SHORT_ROUND_PLAYERS } from "./roles";
-import type {
-  Action,
-  Death,
-  DeathCause,
-  GameState,
-  NightState,
-  NightTask,
-  Player,
-  Winner,
-} from "./types";
+import { mayVoteFor, tallyElection, tallyVerdict, voters } from "./day";
+import { kill } from "./death";
+import {
+  advanceTo,
+  endStep,
+  forceStep,
+  freshNight,
+  nightAction,
+  resolveNight,
+  stepComplete,
+  STEPS,
+  stepHasWork,
+} from "./night";
+import {
+  ACTOR_POWERS,
+  autoRoles,
+  composition,
+  countsOf,
+  deal,
+  FREE_CHOICE_FROM,
+  MAX_PLAYERS,
+  modeFor,
+  ROLE_ORDER,
+  ROLES,
+  shuffle,
+} from "./roles";
+import { type Ctx, find, GameError, living, log, nameOf } from "./state";
+import type { Action, Announce, Death, GameState, Player, RoleId, Settings, Winner } from "./types";
+import { STATE_REV } from "./types";
+import { checkWinner, winnersOf } from "./win";
 
-/** A rule violation. The message is shown to the player as is. */
-export class GameError extends Error {}
-
-export interface Ctx {
-  now: number;
-  /** Returns a float in [0, 1). */
-  rng: () => number;
-}
+export { GameError } from "./state";
+export type { Ctx } from "./state";
 
 const NAME_MAX = 14;
+/** Rejoin requests older than this are dropped. */
+const REJOIN_TTL = 15 * 60 * 1000;
 
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("Bitte gib einen Namen ein.");
@@ -33,43 +48,89 @@ export function cleanName(raw: unknown): string {
   return name;
 }
 
-function freshNight(): NightState {
+function defaults(): Omit<GameState, "code" | "createdAt"> {
   return {
-    wolfVotes: {},
-    victim: null,
-    seerDone: false,
-    amorDone: false,
-    suspects: {},
-    witch: null,
+    rev: STATE_REV,
+    hostId: "",
+    players: [],
+    settings: { auto: true, counts: {}, captain: false, decoy: true, discussionSeconds: 180 },
+    phase: "lobby",
+    mode: "normal",
+    round: 0,
+    acks: [],
+    ready: [],
+    deadline: null,
+    night: freshNight(),
+    center: [],
+    lovers: null,
+    wildModel: null,
+    potions: { heal: true, poison: true },
+    lastProtected: null,
+    actorPowers: [],
+    foxActive: true,
+    infectionUsed: false,
+    packLost: false,
+    elderShield: false,
+    powersLost: false,
+    tetanus: null,
+    angelChance: false,
+    marks: [],
+    captain: null,
+    captainElected: false,
+    voters: null,
+    pending: [],
+    after: "night",
+    vote: { kind: "lynch", round: 1, candidates: null, ballots: {}, previous: null },
+    announce: null,
+    winner: null,
+    winners: [],
+    notes: {},
+    history: [],
+    suspicions: [],
+    rejoins: [],
+    handled: {},
   };
 }
 
 export function newGame(code: string, now: number): GameState {
-  return {
-    code,
-    hostId: "",
-    createdAt: now,
-    players: [],
-    settings: {
-      auto: true,
-      custom: { wolves: 1, seherin: true, hexe: true, jaeger: false, amor: false },
-      discussionSeconds: 180,
-    },
-    phase: "lobby",
-    short: false,
-    round: 0,
-    acks: [],
-    deadline: null,
-    night: freshNight(),
-    lovers: null,
-    potions: { heal: true, poison: true },
-    seerLog: [],
-    hunterPending: null,
-    vote: { round: 1, candidates: null, ballots: {}, previous: null },
-    announce: null,
-    winner: null,
-    suspicions: [],
+  return { ...defaults(), code, createdAt: now };
+}
+
+/**
+ * Brings a stored room up to the current shape. Rooms from before the
+ * full role system go back to the lobby with their players and settings.
+ */
+export function normalize(raw: GameState): GameState {
+  if (raw.rev === STATE_REV) return { ...defaults(), ...raw };
+  const old = raw as unknown as {
+    code: string;
+    createdAt: number;
+    hostId: string;
+    players: { id: string; name: string; tokenHash: string }[];
+    settings?: { auto?: boolean; discussionSeconds?: number; custom?: Record<string, number | boolean> };
   };
+  const s = newGame(old.code, old.createdAt);
+  s.hostId = old.hostId;
+  s.players = old.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    tokenHash: p.tokenHash,
+    role: null,
+    alive: true,
+    turned: false,
+    enchanted: false,
+    exposed: false,
+  }));
+  s.settings.auto = old.settings?.auto ?? true;
+  s.settings.discussionSeconds = old.settings?.discussionSeconds ?? 180;
+  const custom = old.settings?.custom;
+  if (custom) {
+    s.settings.counts = { werwolf: Number(custom.wolves) || 1 };
+    for (const role of ["seherin", "hexe", "jaeger", "amor"] as RoleId[]) {
+      if (custom[role]) s.settings.counts[role] = 1;
+    }
+  }
+  return s;
 }
 
 export function addPlayer(
@@ -85,7 +146,16 @@ export function addPlayer(
   if (s.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
     throw new GameError("Diesen Namen gibt es schon. Nimm bitte einen anderen.");
   }
-  s.players.push({ id: player.id, name, tokenHash: player.tokenHash, role: null, alive: true });
+  s.players.push({
+    id: player.id,
+    name,
+    tokenHash: player.tokenHash,
+    role: null,
+    alive: true,
+    turned: false,
+    enchanted: false,
+    exposed: false,
+  });
   if (!s.hostId) s.hostId = player.id;
   return s;
 }
@@ -97,44 +167,25 @@ export function transferHost(state: GameState, to: string): GameState {
   return s;
 }
 
-const living = (s: GameState) => s.players.filter((p) => p.alive);
-const livingWolves = (s: GameState) => living(s).filter((p) => p.role === "werwolf");
-const find = (s: GameState, id: string) => s.players.find((p) => p.id === id);
-
-function livingTarget(s: GameState, id: unknown): Player {
-  const p = typeof id === "string" ? find(s, id) : undefined;
-  if (!p || !p.alive) throw new GameError("Diesen Spieler kannst du nicht wählen.");
-  return p;
+/**
+ * Somebody on a new device asks to take over a seat. The new token only
+ * works once the host has accepted the request.
+ */
+export function requestRejoin(
+  state: GameState,
+  playerId: string,
+  request: { id: string; tokenHash: string },
+  now: number,
+): GameState {
+  const s = structuredClone(state);
+  if (!find(s, playerId)) throw new GameError("Diesen Spieler gibt es in diesem Raum nicht.");
+  s.rejoins = s.rejoins.filter((r) => r.playerId !== playerId && now - r.at < REJOIN_TTL).slice(-9);
+  s.rejoins.push({ id: request.id, playerId, tokenHash: request.tokenHash, at: now });
+  return s;
 }
 
-export function nightTask(s: GameState, p: Player): NightTask {
-  if (p.role === "werwolf") return s.short ? "lurk" : "wolf";
-  if (p.role === "seherin") return "seer";
-  if (p.role === "amor" && s.round === 1) return "amor";
-  return "suspect";
-}
-
-/** The victim all living wolves agree on, or null while they still differ. */
-export function wolfConsensus(s: GameState): string | null {
-  const wolves = livingWolves(s);
-  if (wolves.length === 0) return null;
-  const first = s.night.wolfVotes[wolves[0].id];
-  if (!first) return null;
-  return wolves.every((w) => s.night.wolfVotes[w.id] === first) ? first : null;
-}
-
-export function nightDone(s: GameState, p: Player): boolean {
-  switch (nightTask(s, p)) {
-    case "wolf":
-      return wolfConsensus(s) !== null;
-    case "seer":
-      return s.night.seerDone;
-    case "amor":
-      return s.night.amorDone;
-    case "suspect":
-    case "lurk":
-      return p.id in s.night.suspects;
-  }
+export function openRejoins(s: GameState, now: number) {
+  return s.rejoins.filter((r) => now - r.at < REJOIN_TTL);
 }
 
 /** Who has to confirm the current phase before the game moves on. */
@@ -142,8 +193,6 @@ export function ackers(s: GameState): Player[] {
   switch (s.phase) {
     case "roles":
       return s.players;
-    case "witch":
-      return living(s).filter((p) => p.role !== "hexe");
     case "announce": {
       const alive = living(s);
       return alive.length > 0 ? alive : s.players;
@@ -155,217 +204,258 @@ export function ackers(s: GameState): Player[] {
   }
 }
 
-export function checkWinner(s: GameState): Winner | null {
-  const alive = living(s);
-  if (alive.length === 0) return "niemand";
-  const wolves = alive.filter((p) => p.role === "werwolf").length;
-  if (s.lovers && alive.length === 2 && s.lovers.every((id) => find(s, id)?.alive)) {
-    const teams = s.lovers.map((id) => ROLES[find(s, id)!.role!].team);
-    if (teams[0] !== teams[1]) return "paar";
-  }
-  if (wolves === 0) return "dorf";
-  if (wolves >= alive.length - wolves) return "wolf";
-  return null;
+function toLobby(s: GameState) {
+  const keep = { code: s.code, createdAt: s.createdAt, hostId: s.hostId, settings: s.settings };
+  const players = s.players.map((p) => ({
+    ...p,
+    role: null,
+    alive: true,
+    turned: false,
+    enchanted: false,
+    exposed: false,
+  }));
+  Object.assign(s, defaults(), keep, { players, rejoins: s.rejoins, handled: s.handled });
 }
 
-function kill(s: GameState, id: string, cause: DeathCause, deaths: Death[]) {
-  const p = find(s, id);
-  if (!p || !p.alive) return;
-  p.alive = false;
-  deaths.push({ id, cause });
-  if (p.role === "jaeger") s.hunterPending = p.id;
-  if (s.lovers?.includes(id)) {
-    kill(s, s.lovers[0] === id ? s.lovers[1] : s.lovers[0], "liebe", deaths);
-  }
+function startGame(s: GameState, ctx: Ctx) {
+  const comp = composition(s.players.length, s.settings);
+  if (!comp.roles) throw new GameError(comp.error);
+  toLobby(s);
+  s.mode = modeFor(s.players.length);
+  const { hands, center } = deal(comp.roles, s.players.length, ctx.rng);
+  s.players.forEach((p, i) => (p.role = hands[i]));
+  s.center = center;
+  if (hands.includes("schauspieler")) s.actorPowers = shuffle(ACTOR_POWERS, ctx.rng).slice(0, 3);
+  s.elderShield = hands.includes("aeltester");
+  s.angelChance = hands.includes("engel");
+  s.phase = "roles";
+  const list = ROLE_ORDER.filter((r) => comp.roles.includes(r))
+    .map((r) => {
+      const n = comp.roles.filter((x) => x === r).length;
+      return n > 1 ? `${ROLES[r].name} ×${n}` : ROLES[r].name;
+    })
+    .join(", ");
+  log(s, `Das Spiel beginnt mit ${s.players.length} Spielern. Karten: ${list}.`, false, true);
+  for (const p of s.players) log(s, `${p.name} ist ${ROLES[p.role!].was}.`, true, true);
 }
 
-function startNight(s: GameState) {
+function afterRoles(s: GameState, ctx: Ctx) {
+  // With the Engel the game opens with a day, so he can be voted out at once.
+  if (s.angelChance) startDay(s, ctx);
+  else startNight(s, ctx);
+}
+
+function startNight(s: GameState, ctx: Ctx) {
   s.round += 1;
   s.phase = "night";
   s.acks = [];
   s.deadline = null;
   s.announce = null;
   s.night = freshNight();
+  advanceNight(s, ctx);
+}
+
+/** Moves to the next step with work once everybody is done, and resolves the night after the last. */
+function advanceNight(s: GameState, ctx: Ctx) {
+  while (s.phase === "night") {
+    if (s.night.step && !stepComplete(s)) return;
+    if (s.night.step) endStep(s, ctx);
+    const from = s.night.step ? STEPS.indexOf(s.night.step) + 1 : 0;
+    const next = STEPS.slice(from).find((step) => stepHasWork(s, step));
+    if (next) {
+      advanceTo(s, next);
+      continue;
+    }
+    announce(s, resolveNight(s), "day");
+  }
+}
+
+function announce(s: GameState, a: Announce, after?: GameState["after"]) {
+  s.announce = a;
+  s.phase = "announce";
+  s.acks = [];
+  s.deadline = null;
+  if (after) s.after = after;
+}
+
+/** After an announcement: pending choices first, then the next phase. */
+function afterAnnounce(s: GameState, ctx: Ctx) {
+  if (s.winner === "engel") return end(s, "engel");
+  while (s.pending.length > 0) {
+    const next = s.pending[0];
+    const decided = checkWinner(s);
+    // The Jäger may still turn a win of the wolves or of a loner.
+    const matters = !decided || (next.kind === "hunter" && decided !== "dorf" && decided !== "niemand");
+    if (find(s, next.who) && living(s).some((p) => p.id !== next.who) && matters) {
+      s.phase = next.kind;
+      s.acks = [];
+      return;
+    }
+    s.pending.shift();
+  }
+  proceed(s, ctx);
+}
+
+function proceed(s: GameState, ctx: Ctx) {
+  const winner = checkWinner(s);
+  if (winner) return end(s, winner);
+  if (s.after === "night") {
+    // A short round has one day only: a wolf who gets through it has won.
+    if (s.mode === "kurz" && s.round >= 1) return end(s, "wolf");
+    return startNight(s, ctx);
+  }
+  if (s.after === "discussion") return startDiscussion(s, ctx);
+  startDay(s, ctx);
+}
+
+function startDay(s: GameState, ctx: Ctx) {
+  if (s.settings.captain && s.mode === "normal" && !s.captainElected) {
+    s.phase = "election";
+    s.acks = [];
+    s.deadline = null;
+    s.vote = { kind: "election", round: 1, candidates: null, ballots: {}, previous: null };
+    return;
+  }
+  startDiscussion(s, ctx);
 }
 
 function startDiscussion(s: GameState, ctx: Ctx) {
   s.phase = "discussion";
   s.acks = [];
-  s.deadline =
-    s.settings.discussionSeconds > 0 ? ctx.now + s.settings.discussionSeconds * 1000 : null;
+  s.deadline = s.settings.discussionSeconds > 0 ? ctx.now + s.settings.discussionSeconds * 1000 : null;
 }
 
 function startVote(s: GameState) {
   s.phase = "vote";
   s.acks = [];
   s.deadline = null;
-  s.vote = { round: 1, candidates: null, ballots: {}, previous: null };
+  s.vote = { kind: "lynch", round: 1, candidates: null, ballots: {}, previous: null };
+  if (voters(s).length === 0) {
+    log(s, "Heute durfte niemand abstimmen.", false);
+    s.voters = null;
+    s.marks = [];
+    announce(s, { kind: "verdict", deaths: [], ballots: {}, tie: false }, "night");
+  }
 }
 
-function announce(s: GameState, a: NonNullable<GameState["announce"]>) {
-  s.announce = a;
-  s.phase = "announce";
-  s.acks = [];
-  s.deadline = null;
-}
-
-function finishNight(s: GameState, victim: string | null) {
-  s.night.victim = victim;
-  if (living(s).some((p) => p.role === "hexe")) {
-    s.phase = "witch";
-    s.acks = [];
+function countVotes(s: GameState, ctx: Ctx) {
+  if (!voters(s).every((p) => p.id in s.vote.ballots)) return;
+  if (s.vote.kind === "election") {
+    const result = tallyElection(s, ctx);
+    if (result) announce(s, result, "discussion");
   } else {
-    resolveNight(s);
+    const result = tallyVerdict(s);
+    if (result) announce(s, result, "night");
   }
 }
 
-function resolveNight(s: GameState) {
-  const deaths: Death[] = [];
-  const { victim, witch } = s.night;
-  if (witch?.heal) s.potions.heal = false;
-  if (witch?.poison) s.potions.poison = false;
-  if (victim && !witch?.heal) kill(s, victim, "wolf", deaths);
-  if (witch?.poison) kill(s, witch.poison, "gift", deaths);
-  announce(s, { kind: "morning", deaths, next: "discussion" });
-}
+const WINNER_TEXT: Record<Winner, string> = {
+  dorf: "Das Dorf gewinnt.",
+  wolf: "Das Rudel gewinnt.",
+  paar: "Das Liebespaar gewinnt.",
+  niemand: "Niemand hat überlebt.",
+  floetenspieler: "Der Flötenspieler gewinnt.",
+  weisserWolf: "Der Weiße Werwolf gewinnt.",
+  engel: "Der Engel gewinnt.",
+};
 
-function proceed(s: GameState, next: "discussion" | "night", ctx: Ctx) {
-  let winner = checkWinner(s);
-  // A short round has one day only: a wolf who gets through it has won.
-  if (!winner && s.short && next === "night") winner = "wolf";
-  if (winner) {
-    s.winner = winner;
-    s.phase = "ended";
-    s.acks = [];
-    s.deadline = null;
-    return;
-  }
-  if (next === "discussion") startDiscussion(s, ctx);
-  else startNight(s);
-}
-
-function afterAnnounce(s: GameState, ctx: Ctx) {
-  const next = s.announce?.next ?? "night";
-  if (s.hunterPending) {
-    // The last shot only matters while there is still a wolf to hit.
-    if (livingWolves(s).length > 0) {
-      s.phase = "hunter";
-      s.acks = [];
-      return;
-    }
-    s.hunterPending = null;
-  }
-  proceed(s, next, ctx);
-}
-
-function tally(s: GameState) {
-  const ballots = s.vote.ballots;
-  const counts = new Map<string, number>();
-  for (const target of Object.values(ballots)) {
-    if (target) counts.set(target, (counts.get(target) ?? 0) + 1);
-  }
-  const max = Math.max(0, ...counts.values());
-  const top = [...counts].filter(([, n]) => n === max).map(([id]) => id);
-  if (top.length > 1 && s.vote.round === 1) {
-    s.vote = { round: 2, candidates: top, ballots: {}, previous: ballots };
-    return;
-  }
-  const deaths: Death[] = [];
-  if (top.length === 1) kill(s, top[0], "vote", deaths);
-  announce(s, { kind: "verdict", deaths, next: "night", ballots, tie: top.length > 1 });
-}
-
-function toLobby(s: GameState) {
-  for (const p of s.players) {
-    p.role = null;
-    p.alive = true;
-  }
-  s.phase = "lobby";
-  s.short = false;
-  s.round = 0;
+function end(s: GameState, winner: Winner) {
+  s.winner = winner;
+  s.winners = winnersOf(s, winner);
+  s.phase = "ended";
   s.acks = [];
   s.deadline = null;
-  s.night = freshNight();
-  s.lovers = null;
-  s.potions = { heal: true, poison: true };
-  s.seerLog = [];
-  s.hunterPending = null;
-  s.vote = { round: 1, candidates: null, ballots: {}, previous: null };
-  s.announce = null;
-  s.winner = null;
-  s.suspicions = [];
+  s.pending = [];
+  log(s, `Spielende: ${WINNER_TEXT[winner]}`, false);
 }
 
 function ackComplete(s: GameState) {
   return ackers(s).every((p) => s.acks.includes(p.id));
 }
 
-function advanceIfAcked(s: GameState, ctx: Ctx) {
-  switch (s.phase) {
-    case "roles":
-      if (ackComplete(s)) startNight(s);
-      break;
-    case "witch":
-      if (s.night.witch && ackComplete(s)) resolveNight(s);
-      break;
-    case "announce":
-      if (ackComplete(s)) afterAnnounce(s, ctx);
-      break;
-    case "discussion":
-      if (ackComplete(s)) startVote(s);
-      break;
+/** A dead Jäger shoots, a Hauptmann names a successor, a Sündenbock picks tomorrow's voters. */
+function choose(s: GameState, me: Player, targets: string[]) {
+  const pending = s.pending[0];
+  if (!pending || pending.who !== me.id || s.phase !== pending.kind) {
+    throw new GameError("Du bist gerade nicht dran.");
   }
+  const picked = [...new Set(targets)].map((id) => find(s, id));
+  if (picked.some((p) => !p?.alive || p.id === me.id)) throw new GameError("Diesen Spieler kannst du nicht wählen.");
+  const ids = picked.map((p) => p!.id);
+
+  if (pending.kind === "scapegoat") {
+    s.voters = ids;
+    const names = ids.map((id) => nameOf(s, id)).join(", ") || "niemand";
+    log(s, `Der Sündenbock bestimmte, wer abstimmen darf: ${names}.`, false);
+    s.pending.shift();
+    return announce(s, { kind: "scapegoat", deaths: [], voters: ids });
+  }
+  if (ids.length !== 1) throw new GameError("Wähle genau einen Spieler.");
+  s.pending.shift();
+  if (pending.kind === "hunter") {
+    const deaths: Death[] = [];
+    const powersBefore = s.powersLost;
+    log(s, `Der Jäger schoss auf ${nameOf(s, ids[0])}.`, false);
+    kill(s, ids[0], "jaeger", deaths);
+    return announce(s, { kind: "hunter", deaths, powersLost: s.powersLost && !powersBefore });
+  }
+  s.captain = ids[0];
+  log(s, `${nameOf(s, ids[0])} ist neuer Hauptmann.`, false);
+  announce(s, { kind: "succession", deaths: [], captain: ids[0] });
 }
 
 /** Host escape hatch: finish the current phase with whatever has been entered. */
 function force(s: GameState, ctx: Ctx) {
   switch (s.phase) {
     case "roles":
-      startNight(s);
-      break;
-    case "night": {
-      let victim = wolfConsensus(s);
-      if (!victim) {
-        const counts = new Map<string, number>();
-        for (const w of livingWolves(s)) {
-          const t = s.night.wolfVotes[w.id];
-          if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
-        }
-        victim = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-      }
-      finishNight(s, victim);
-      break;
-    }
-    case "witch":
-      s.night.witch ??= { heal: false, poison: null };
-      resolveNight(s);
-      break;
+      return afterRoles(s, ctx);
+    case "night":
+      forceStep(s);
+      return advanceNight(s, ctx);
     case "announce":
-      afterAnnounce(s, ctx);
-      break;
+      return afterAnnounce(s, ctx);
     case "hunter":
-      s.hunterPending = null;
-      proceed(s, s.announce?.next ?? "night", ctx);
-      break;
+    case "scapegoat":
+    case "succession":
+      if (s.phase === "succession") s.captain = null;
+      s.pending.shift();
+      return afterAnnounce(s, ctx);
     case "discussion":
-      startVote(s);
-      break;
+      return startVote(s);
+    case "election":
     case "vote":
-      for (const p of living(s)) if (!(p.id in s.vote.ballots)) s.vote.ballots[p.id] = null;
-      tally(s);
-      break;
+      for (const p of voters(s)) if (!(p.id in s.vote.ballots)) s.vote.ballots[p.id] = null;
+      return countVotes(s, ctx);
     default:
       throw new GameError("Hier gibt es nichts zu überspringen.");
   }
 }
 
-function shuffle<T>(items: T[], rng: () => number): T[] {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+function changeSettings(s: GameState, input: Partial<Settings>) {
+  const { auto, counts, captain, decoy, discussionSeconds } = input ?? {};
+  if (typeof auto === "boolean") {
+    s.settings.auto = auto;
+    if (!auto && !counts && Object.keys(s.settings.counts).length === 0) {
+      s.settings.counts = countsOf(autoRoles(Math.max(FREE_CHOICE_FROM, s.players.length)));
+    }
   }
-  return a;
+  if (typeof captain === "boolean") s.settings.captain = captain;
+  if (typeof decoy === "boolean") s.settings.decoy = decoy;
+  if (typeof discussionSeconds === "number") {
+    const d = Math.round(discussionSeconds);
+    if (d !== 0 && (d < 30 || d > 900)) throw new GameError("Ungültige Diskussionszeit.");
+    s.settings.discussionSeconds = d;
+  }
+  // The page always sends the whole choice, so it replaces the old one.
+  if (counts && typeof counts === "object") {
+    s.settings.counts = {};
+    for (const role of ROLE_ORDER) {
+      const n = counts[role];
+      if (typeof n === "number" && Number.isFinite(n) && n > 0) {
+        s.settings.counts[role] = Math.min(MAX_PLAYERS + 2, Math.round(n));
+      }
+    }
+  }
 }
 
 export function applyAction(
@@ -373,7 +463,10 @@ export function applyAction(
   playerId: string,
   action: Action,
   ctx: Ctx,
+  actionId?: string,
 ): GameState {
+  // The same request twice, e.g. after a lost connection: nothing more to do.
+  if (actionId && state.handled[playerId] === actionId) return state;
   const s = structuredClone(state);
   const me = find(s, playerId);
   if (!me) throw new GameError("Du bist nicht in diesem Raum.");
@@ -389,198 +482,111 @@ export function applyAction(
   };
 
   switch (action.type) {
-    case "settings": {
+    case "settings":
       hostOnly();
       inPhase("lobby");
-      const { custom, auto, discussionSeconds } = action.settings ?? {};
-      if (typeof auto === "boolean") s.settings.auto = auto;
-      if (typeof discussionSeconds === "number") {
-        const d = Math.round(discussionSeconds);
-        if (d !== 0 && (d < 30 || d > 900)) throw new GameError("Ungültige Diskussionszeit.");
-        s.settings.discussionSeconds = d;
-      }
-      if (custom && typeof custom === "object") {
-        const c = s.settings.custom;
-        if (typeof custom.wolves === "number") {
-          c.wolves = Math.min(6, Math.max(1, Math.round(custom.wolves)));
-        }
-        for (const key of ["seherin", "hexe", "jaeger", "amor"] as const) {
-          if (typeof custom[key] === "boolean") c[key] = custom[key];
-        }
-      }
+      changeSettings(s, action.settings);
       break;
-    }
 
-    case "kick": {
+    case "ready":
+      inPhase("lobby");
+      s.ready = s.ready.filter((id) => id !== me.id);
+      if (action.ready) s.ready.push(me.id);
+      break;
+
+    case "kick":
       hostOnly();
       inPhase("lobby");
       if (action.target === me.id) throw new GameError("Du kannst dich nicht selbst entfernen.");
       s.players = s.players.filter((p) => p.id !== action.target);
+      s.ready = s.ready.filter((id) => id !== action.target);
       break;
-    }
 
-    case "leave": {
+    case "leave":
       inPhase("lobby");
       s.players = s.players.filter((p) => p.id !== me.id);
+      s.ready = s.ready.filter((id) => id !== me.id);
       if (isHost) s.hostId = s.players[0]?.id ?? "";
       break;
-    }
 
-    case "start": {
+    case "start":
       hostOnly();
       inPhase("lobby");
-      const comp = composition(s.players.length, s.settings);
-      if (!comp.roles) throw new GameError(comp.error);
-      toLobby(s);
-      s.short = s.players.length === SHORT_ROUND_PLAYERS;
-      const dealt = shuffle(comp.roles, ctx.rng);
-      s.players.forEach((p, i) => (p.role = dealt[i]));
-      s.phase = "roles";
+      startGame(s, ctx);
       break;
-    }
 
-    case "ack": {
-      inPhase("roles", "witch", "announce", "discussion");
-      if (!ackers(s).some((p) => p.id === me.id)) {
-        throw new GameError("Du musst gerade nichts bestätigen.");
-      }
+    case "ack":
+      inPhase("roles", "announce", "discussion");
+      if (!ackers(s).some((p) => p.id === me.id)) throw new GameError("Du musst gerade nichts bestätigen.");
       if (!s.acks.includes(me.id)) s.acks.push(me.id);
-      advanceIfAcked(s, ctx);
-      break;
-    }
-
-    case "wolfVote": {
-      inPhase("night");
-      mustLive();
-      if (s.short) throw new GameError("In der Kurzrunde erwischt der Werwolf niemanden.");
-      if (nightTask(s, me) !== "wolf") throw new GameError("Du bist kein Werwolf.");
-      if (wolfConsensus(s)) throw new GameError("Ihr habt euch schon entschieden.");
-      const target = livingTarget(s, action.target);
-      if (target.role === "werwolf") throw new GameError("Werwölfe fressen keine Werwölfe.");
-      s.night.wolfVotes[me.id] = target.id;
-      break;
-    }
-
-    case "seerPeek": {
-      inPhase("night");
-      mustLive();
-      if (nightTask(s, me) !== "seer") throw new GameError("Du bist nicht die Seherin.");
-      if (s.night.seerDone) throw new GameError("Du hast heute Nacht schon jemanden angesehen.");
-      const target = livingTarget(s, action.target);
-      if (target.id === me.id) throw new GameError("Deine eigene Rolle kennst du schon.");
-      s.seerLog.push({ round: s.round, target: target.id, role: target.role! });
-      s.night.seerDone = true;
-      break;
-    }
-
-    case "amorPick": {
-      inPhase("night");
-      mustLive();
-      if (nightTask(s, me) !== "amor") throw new GameError("Du bist nicht Amor.");
-      if (s.night.amorDone) throw new GameError("Du hast die Verliebten schon bestimmt.");
-      const a = livingTarget(s, action.a);
-      const b = livingTarget(s, action.b);
-      if (a.id === b.id) throw new GameError("Wähle zwei verschiedene Spieler.");
-      s.lovers = [a.id, b.id];
-      s.night.amorDone = true;
-      break;
-    }
-
-    case "suspect": {
-      inPhase("night");
-      mustLive();
-      const task = nightTask(s, me);
-      if (task !== "suspect" && task !== "lurk") throw new GameError("Du hast eine andere Aufgabe.");
-      if (me.id in s.night.suspects) throw new GameError("Du hast schon getippt.");
-      const target = livingTarget(s, action.target);
-      if (target.id === me.id) throw new GameError("Dich selbst kannst du nicht verdächtigen.");
-      s.night.suspects[me.id] = target.id;
-      // A lurking wolf only taps along; it is not a real guess.
-      if (task === "suspect") s.suspicions.push({ round: s.round, by: me.id, target: target.id });
-      break;
-    }
-
-    case "witch": {
-      inPhase("witch");
-      mustLive();
-      if (me.role !== "hexe") throw new GameError("Du bist nicht die Hexe.");
-      if (s.night.witch) throw new GameError("Du hast dich schon entschieden.");
-      const heal = action.heal === true;
-      if (heal && (!s.potions.heal || !s.night.victim)) {
-        throw new GameError("Der Heiltrank hilft gerade nicht.");
+      if (ackComplete(s)) {
+        if (s.phase === "roles") afterRoles(s, ctx);
+        else if (s.phase === "announce") afterAnnounce(s, ctx);
+        else startVote(s);
       }
-      let poison: string | null = null;
-      if (action.poison) {
-        if (!s.potions.poison) throw new GameError("Der Gifttrank ist schon verbraucht.");
-        const target = livingTarget(s, action.poison);
-        if (target.id === me.id) throw new GameError("Dich selbst vergiftest du besser nicht.");
-        poison = target.id;
-      }
-      s.night.witch = { heal, poison };
-      advanceIfAcked(s, ctx);
       break;
-    }
 
-    case "hunterShoot": {
-      inPhase("hunter");
-      if (s.hunterPending !== me.id) throw new GameError("Du bist nicht der Jäger.");
-      const target = livingTarget(s, action.target);
-      const deaths: Death[] = [];
-      s.hunterPending = null;
-      kill(s, target.id, "jaeger", deaths);
-      announce(s, { kind: "hunter", deaths, next: s.announce?.next ?? "night" });
+    case "night":
+      inPhase("night");
+      mustLive();
+      nightAction(s, me, action);
+      advanceNight(s, ctx);
       break;
-    }
 
     case "vote": {
-      inPhase("vote");
+      inPhase("vote", "election");
       mustLive();
+      if (!voters(s).some((p) => p.id === me.id)) throw new GameError("Du darfst diesmal nicht abstimmen.");
       let target: string | null = null;
       if (action.target !== null) {
-        const t = livingTarget(s, action.target);
-        if (t.id === me.id) throw new GameError("Du kannst nicht für dich selbst stimmen.");
-        if (s.vote.candidates && !s.vote.candidates.includes(t.id)) {
-          throw new GameError("In der Stichwahl stehen nur die Gleichstände zur Wahl.");
-        }
+        const t = find(s, action.target);
+        if (!t || !mayVoteFor(s, me, t)) throw new GameError("Für diesen Spieler kannst du nicht stimmen.");
         target = t.id;
       }
       s.vote.ballots[me.id] = target;
-      if (living(s).every((p) => p.id in s.vote.ballots)) tally(s);
+      countVotes(s, ctx);
       break;
     }
 
-    case "tick": {
+    case "choose":
+      choose(s, me, action.targets ?? []);
+      break;
+
+    case "tick":
       if (s.phase === "discussion" && s.deadline !== null && ctx.now >= s.deadline) startVote(s);
       break;
-    }
 
-    case "force": {
+    case "force":
       hostOnly();
       force(s, ctx);
       break;
-    }
 
-    case "abort": {
+    case "abort":
       hostOnly();
       if (s.phase === "lobby") throw new GameError("Ihr seid schon in der Lobby.");
       toLobby(s);
       break;
-    }
 
-    case "again": {
+    case "again":
       hostOnly();
       inPhase("ended");
       toLobby(s);
+      break;
+
+    case "rejoin": {
+      hostOnly();
+      const request = s.rejoins.find((r) => r.id === action.request);
+      if (!request) throw new GameError("Diese Anfrage gibt es nicht mehr.");
+      s.rejoins = s.rejoins.filter((r) => r.playerId !== request.playerId);
+      const seat = find(s, request.playerId);
+      if (action.accept && seat) seat.tokenHash = request.tokenHash;
       break;
     }
 
     default:
       throw new GameError("Unbekannte Aktion.");
   }
-
-  // Night actions can complete the night; checked once here for all of them.
-  if (s.phase === "night" && living(s).every((p) => nightDone(s, p))) {
-    finishNight(s, wolfConsensus(s));
-  }
+  if (actionId) s.handled[me.id] = actionId;
   return s;
 }
+

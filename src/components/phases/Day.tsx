@@ -3,56 +3,62 @@
 import { useCallback, useEffect, useState } from "react";
 import { CAUSE_TEXT } from "@/lib/client/narrator";
 import { ROLES } from "@/lib/game/roles";
-import type { View, Winner } from "@/lib/game/types";
+import type { Announce, View, Winner } from "@/lib/game/types";
 import { Avatar, Button, Card, PlayerGrid, Title, Waiting } from "../ui";
-import { Ballots, nameOf, type PhaseProps } from "./shared";
+import { Ballots, History, nameOf, NoteText, type PhaseProps } from "./shared";
 
-const ANNOUNCE_TITLE = {
+const ANNOUNCE_TITLE: Record<Announce["kind"], string> = {
   morning: "Der Morgen graut",
   verdict: "Das Dorf hat entschieden",
   hunter: "Der Jäger hat geschossen",
+  election: "Der Hauptmann ist gewählt",
+  succession: "Ein neuer Hauptmann",
+  scapegoat: "Der Sündenbock hat entschieden",
 };
+
+function quietLine(view: View, a: Announce): string | undefined {
+  if (a.deaths.length > 0 || a.exposed) return undefined;
+  switch (a.kind) {
+    case "morning":
+      return view.short ? "Alle haben die Nacht überlebt – doch einer von euch ist ein Werwolf!" : "Alle haben die Nacht überlebt!";
+    case "verdict":
+      return `${a.tie ? "Wieder Gleichstand" : "Niemand wurde gewählt"} – ${
+        view.short ? "der Werwolf bleibt unentdeckt." : "heute muss niemand gehen."
+      }`;
+    case "election":
+    case "succession":
+      return `${nameOf(view, a.captain)} ist jetzt Hauptmann. Seine Stimme zählt doppelt.`;
+    case "scapegoat":
+      return a.voters && a.voters.length > 0
+        ? `Morgen dürfen nur ${a.voters.map((id) => nameOf(view, id)).join(", ")} abstimmen.`
+        : "Morgen darf niemand abstimmen.";
+    default:
+      return undefined;
+  }
+}
 
 export function AnnouncePhase({ view, api }: PhaseProps) {
   const a = view.announce;
   if (!a) return null;
   const nobodyLeft = view.players.every((p) => !p.alive);
   const mayConfirm = (view.me.alive || nobodyLeft) && !view.me.done;
-  const fresh = a.kind === "morning" && view.round === 1;
-  const mayShootSoon = view.me.role === "jaeger" && a.deaths.some((d) => d.id === view.me.id);
+  const morning = a.kind === "morning";
+  const fresh = morning && view.round === 1;
+  const mayShootSoon = view.me.role === "jaeger" && a.deaths.some((d) => d.id === view.me.id) && !view.powersLost;
+  // Private news of tonight, only for this player.
+  const mine = morning
+    ? view.notes.filter((n) => n.round === view.round && (n.kind === "turned" || n.kind === "infected"))
+    : [];
+  const enchantedTonight = morning && view.me.enchanted;
 
   return (
     <>
-      <Title
-        sub={
-          a.deaths.length > 0
-            ? undefined
-            : a.kind === "morning"
-              ? view.short
-                ? "Alle haben die Nacht überlebt – doch einer von euch ist ein Werwolf!"
-                : "Alle haben die Nacht überlebt!"
-              : `${a.tie ? "Wieder Gleichstand" : "Niemand wurde gewählt"} – ${
-                  view.short ? "der Werwolf bleibt unentdeckt." : "heute muss niemand gehen."
-                }`
-        }
-      >
-        {ANNOUNCE_TITLE[a.kind]}
-      </Title>
+      <Title sub={quietLine(view, a)}>{ANNOUNCE_TITLE[a.kind]}</Title>
 
-      {a.deaths.length === 0 && (
+      {a.deaths.length === 0 && !a.exposed && (morning || a.kind === "verdict") && (
         <div className="grid flex-1 place-items-center text-8xl" aria-hidden>
-          {a.kind === "morning" ? "🌤️" : "🤷"}
+          {morning ? "🌤️" : "🤷"}
         </div>
-      )}
-
-      {view.short && a.kind === "morning" && (
-        <Card className="rise text-center">
-          <p className="text-xl font-extrabold">Ihr habt genau eine Abstimmung</p>
-          <p className="text-ink-soft">
-            Verbannt ihr den Werwolf, gewinnt das Dorf. Trefft ihr jemand anderen oder könnt ihr
-            euch nicht einigen, gewinnt der Werwolf.
-          </p>
-        </Card>
       )}
 
       <ul className="space-y-2.5">
@@ -82,6 +88,37 @@ export function AnnouncePhase({ view, api }: PhaseProps) {
         })}
       </ul>
 
+      {a.exposed && (
+        <Card className="rise text-center">
+          <p className="text-4xl">🤪</p>
+          <p className="text-xl font-extrabold">{nameOf(view, a.exposed)} ist der Dorfdepp!</p>
+          <p className="text-ink-soft">Er darf im Dorf bleiben, aber nie mehr abstimmen.</p>
+        </Card>
+      )}
+      {a.powersLost && (
+        <Card className="rise border-danger text-center">
+          <p className="text-4xl">👴</p>
+          <p className="font-extrabold">Das Dorf hat den Ältesten getötet.</p>
+          <p className="text-ink-soft">Alle Dorfbewohner verlieren ihre Fähigkeiten.</p>
+        </Card>
+      )}
+      {a.growl !== undefined && a.growl !== null && (
+        <Card className="rise text-center">
+          <p className="text-4xl">🐻</p>
+          <p className="font-extrabold">{a.growl ? "Der Bär brummt!" : "Der Bär bleibt ruhig."}</p>
+          <p className="text-ink-soft">
+            {a.growl ? "Neben dem Bärenführer sitzt ein Wolf." : "Neben dem Bärenführer sitzt kein Wolf."}
+          </p>
+        </Card>
+      )}
+      {a.marked && a.marked.length > 0 && (
+        <Card className="rise text-center">
+          <p className="text-4xl">🪶</p>
+          <p className="font-extrabold">Der Rabe hat {a.marked.map((id) => nameOf(view, id)).join(" und ")} markiert.</p>
+          <p className="text-ink-soft">Bei der Abstimmung heute zählt das wie zwei Stimmen mehr.</p>
+        </Card>
+      )}
+
       {fresh && view.me.loverId && view.me.alive && (
         <Card className="rise border-accent text-center">
           <p className="text-4xl">💘</p>
@@ -89,6 +126,29 @@ export function AnnouncePhase({ view, api }: PhaseProps) {
           <p className="text-ink-soft">
             Du bist verliebt in <b className="text-ink">{nameOf(view, view.me.loverId)}</b>. Scheidet
             einer von euch aus, geht der andere mit. Pssst – das bleibt euer Geheimnis.
+          </p>
+        </Card>
+      )}
+      {mine.map((note, i) => (
+        <Card key={i} className="rise border-accent text-center font-bold">
+          <NoteText view={view} note={note} />
+        </Card>
+      ))}
+      {enchantedTonight && (
+        <Card className="rise border-accent text-center">
+          <p className="font-extrabold">🎶 Du bist verzaubert.</p>
+          <p className="text-ink-soft">
+            Verzaubert sind: {view.players.filter((p) => p.enchanted).map((p) => p.name).join(", ")}
+          </p>
+        </Card>
+      )}
+
+      {view.short && morning && (
+        <Card className="rise text-center">
+          <p className="text-xl font-extrabold">Ihr habt genau eine Abstimmung</p>
+          <p className="text-ink-soft">
+            Verbannt ihr den Werwolf, gewinnt das Dorf. Trefft ihr jemand anderen oder könnt ihr
+            euch nicht einigen, gewinnt der Werwolf.
           </p>
         </Card>
       )}
@@ -114,6 +174,71 @@ export function AnnouncePhase({ view, api }: PhaseProps) {
                 : "Du bist ausgeschieden und schaust jetzt zu."}
           </Waiting>
         )}
+      </div>
+    </>
+  );
+}
+
+const PENDING = {
+  hunter: {
+    emoji: "🏹",
+    mine: { title: "Dein letzter Schuss", hint: "Du bist ausgeschieden – aber du hast noch einen Schuss. Wen nimmst du mit?", button: "🏹 Schießen" },
+    theirs: (name: string) => ({ title: "Der letzte Schuss", hint: `${name} war der Jäger und darf noch ein letztes Mal schießen.`, wait: `${name} zielt …` }),
+  },
+  succession: {
+    emoji: "🎖️",
+    mine: { title: "Dein Nachfolger", hint: "Wer wird der neue Hauptmann? Seine Stimme zählt doppelt.", button: "Zum Hauptmann machen" },
+    theirs: (name: string) => ({ title: "Ein neuer Hauptmann", hint: `${name} bestimmt, wer neuer Hauptmann wird.`, wait: `${name} überlegt …` }),
+  },
+  scapegoat: {
+    emoji: "🐐",
+    mine: { title: "Wer darf abstimmen?", hint: "Du bist der Sündenbock. Wähle, wer bei der nächsten Abstimmung mitstimmen darf.", button: "Diese dürfen abstimmen" },
+    theirs: (name: string) => ({ title: "Der Sündenbock", hint: `${name} war der Sündenbock und bestimmt, wer morgen abstimmen darf.`, wait: `${name} überlegt …` }),
+  },
+};
+
+/** A choice one player has to make for everybody: Jäger, Hauptmann, Sündenbock. */
+export function PendingPhase({ view, api }: PhaseProps) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const pending = view.pending;
+  if (!pending) return null;
+  const text = PENDING[pending.kind];
+  const who = nameOf(view, pending.who);
+  const candidates = view.players.filter((p) => p.alive && p.id !== view.me.id);
+  const many = pending.kind === "scapegoat";
+
+  if (pending.who !== view.me.id) {
+    const theirs = text.theirs(who);
+    return (
+      <>
+        <Title sub={theirs.hint}>{theirs.title}</Title>
+        <div className="grid flex-1 place-items-center text-8xl" aria-hidden>
+          {text.emoji}
+        </div>
+        <Waiting>{theirs.wait}</Waiting>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Title sub={text.mine.hint}>{text.mine.title}</Title>
+      <PlayerGrid
+        players={candidates}
+        selected={picked}
+        onPick={(id) =>
+          setPicked((current) =>
+            many ? (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]) : [id],
+          )
+        }
+      />
+      <div className="mt-auto">
+        <Button
+          disabled={(!many && picked.length !== 1) || api.busy}
+          onClick={() => api.send({ type: "choose", targets: picked })}
+        >
+          {many && picked.length === 0 ? "Niemand darf abstimmen" : text.mine.button}
+        </Button>
       </div>
     </>
   );
@@ -169,7 +294,7 @@ export function DiscussionPhase({ view, api, clockOffset }: PhaseProps & { clock
             : "Wer von euch ist ein Werwolf? Besprecht euch!"
         }
       >
-        Tag {view.round}
+        {view.round === 0 ? "Der erste Tag" : `Tag ${view.round}`}
       </Title>
       <Countdown view={view} clockOffset={clockOffset} onDone={tick} />
       <section className="space-y-2">
@@ -194,9 +319,7 @@ export function DiscussionPhase({ view, api, clockOffset }: PhaseProps & { clock
           </Button>
         ) : (
           <Waiting progress={view.progress}>
-            {view.me.alive
-              ? "Die Abstimmung startet, sobald alle bereit sind."
-              : "Du schaust zu – verrate nichts!"}
+            {view.me.alive ? "Die Abstimmung startet, sobald alle bereit sind." : "Du schaust zu – verrate nichts!"}
           </Waiting>
         )}
       </div>
@@ -210,55 +333,63 @@ export function VotePhase({ view, api }: PhaseProps) {
   const vote = view.vote;
   if (!vote) return null;
 
+  const election = vote.kind === "election";
   const runoff = vote.round === 2;
   const alive = view.players.filter((p) => p.alive);
   const voted = vote.myBallot !== undefined && !changing;
+  const choices = alive.filter(
+    (p) => (election || p.id !== view.me.id) && (!vote.candidates || vote.candidates.includes(p.id)),
+  );
   const cast = async (target: string | null) => {
     if (await api.send({ type: "vote", target })) {
       setPicked(null);
       setChanging(false);
     }
   };
+  const tick = (p: { id: string; done: boolean }) => p.done && <span className="text-xl text-good">✓</span>;
+
+  const sub = runoff
+    ? `Gleichstand! Entscheidet euch zwischen ${(vote.candidates ?? []).map((id) => nameOf(view, id)).join(" und ")}.`
+    : election
+      ? "Wer soll euer Hauptmann sein? Seine Stimme zählt bei jeder Abstimmung doppelt."
+      : view.short
+        ? "Wer ist der Werwolf? Das ist eure einzige Abstimmung."
+        : "Wer soll das Dorf verlassen? Alle stimmen gleichzeitig ab.";
 
   return (
     <>
-      <Title
-        sub={
-          runoff
-            ? `Gleichstand! Entscheidet euch zwischen ${(vote.candidates ?? [])
-                .map((id) => nameOf(view, id))
-                .join(" und ")}.`
-            : view.short
-              ? "Wer ist der Werwolf? Das ist eure einzige Abstimmung."
-              : "Wer soll das Dorf verlassen? Alle stimmen gleichzeitig ab."
-        }
-      >
-        {runoff ? "Stichwahl" : "Abstimmung"}
-      </Title>
+      <Title sub={sub}>{election ? "Hauptmannwahl" : runoff ? "Stichwahl" : "Abstimmung"}</Title>
 
       {runoff && vote.previous && <Ballots view={view} ballots={vote.previous} />}
+      {vote.marked.length > 0 && (
+        <p className="text-center font-bold text-ink-soft">
+          🪶 {vote.marked.map((id) => nameOf(view, id)).join(" und ")} hat schon zwei Stimmen gegen sich.
+        </p>
+      )}
+      {!election && view.captain && (
+        <p className="text-center text-sm font-bold text-ink-soft">
+          🎖️ Die Stimme von {nameOf(view, view.captain)} zählt doppelt.
+        </p>
+      )}
 
-      {!view.me.alive ? (
+      {!view.me.canVote ? (
         <>
-          <PlayerGrid
-            players={alive}
-            badge={(p) => p.done && <span className="text-xl text-good">✓</span>}
-          />
-          <Waiting progress={view.progress}>Das Dorf stimmt ab. Du schaust zu.</Waiting>
+          <PlayerGrid players={alive} badge={tick} />
+          <Waiting progress={view.progress}>
+            {!view.me.alive
+              ? "Das Dorf stimmt ab. Du schaust zu."
+              : view.me.exposed
+                ? "Als Dorfdepp darfst du nicht mehr abstimmen."
+                : "Der Sündenbock hat bestimmt, dass du heute nicht abstimmen darfst."}
+          </Waiting>
         </>
       ) : voted ? (
         <>
           <Card className="rise text-center">
             <p className="text-ink-soft">Deine Stimme</p>
-            <p className="text-2xl font-extrabold">
-              {vote.myBallot ? nameOf(view, vote.myBallot) : "Enthaltung"}
-            </p>
+            <p className="text-2xl font-extrabold">{vote.myBallot ? nameOf(view, vote.myBallot) : "Enthaltung"}</p>
           </Card>
-          <PlayerGrid
-            players={alive}
-            meId={view.me.id}
-            badge={(p) => p.done && <span className="text-xl text-good">✓</span>}
-          />
+          <PlayerGrid players={alive} meId={view.me.id} badge={tick} />
           <div className="mt-auto space-y-3">
             <Waiting progress={view.progress}>Das Ergebnis kommt, wenn alle abgestimmt haben.</Waiting>
             <Button variant="quiet" onClick={() => setChanging(true)}>
@@ -268,13 +399,7 @@ export function VotePhase({ view, api }: PhaseProps) {
         </>
       ) : (
         <>
-          <PlayerGrid
-            players={alive.filter(
-              (p) => p.id !== view.me.id && (!vote.candidates || vote.candidates.includes(p.id)),
-            )}
-            selected={picked ? [picked] : []}
-            onPick={setPicked}
-          />
+          <PlayerGrid players={choices} meId={view.me.id} selected={picked ? [picked] : []} onPick={setPicked} />
           <div className="mt-auto space-y-2.5">
             <Button disabled={!picked || api.busy} onClick={() => cast(picked)}>
               Stimme abgeben
@@ -290,10 +415,13 @@ export function VotePhase({ view, api }: PhaseProps) {
 }
 
 const ENDING: Record<Winner, { emoji: string; title: string; text: string }> = {
-  dorf: { emoji: "🎉", title: "Das Dorf gewinnt!", text: "Alle Werwölfe sind entlarvt." },
-  wolf: { emoji: "🐺", title: "Die Werwölfe gewinnen!", text: "Das Dorf konnte sie nicht aufhalten." },
+  dorf: { emoji: "🎉", title: "Das Dorf gewinnt!", text: "Alle Wölfe sind entlarvt." },
+  wolf: { emoji: "🐺", title: "Das Rudel gewinnt!", text: "Das Dorf konnte die Wölfe nicht aufhalten." },
   paar: { emoji: "💘", title: "Das Liebespaar gewinnt!", text: "Nur die Verliebten sind noch übrig." },
   niemand: { emoji: "🌫️", title: "Niemand gewinnt", text: "Es hat keiner überlebt." },
+  floetenspieler: { emoji: "🎶", title: "Der Flötenspieler gewinnt!", text: "Alle anderen sind verzaubert." },
+  weisserWolf: { emoji: "🤍", title: "Der Weiße Werwolf gewinnt!", text: "Am Ende ist er allein übrig." },
+  engel: { emoji: "👼", title: "Der Engel gewinnt!", text: "Er ist gleich zu Beginn gegangen – genau das wollte er." },
 };
 
 /** The same endings for a round that had a single wolf. */
@@ -302,20 +430,15 @@ const LONE_WOLF_ENDING: Partial<typeof ENDING> = {
   wolf: { emoji: "🐺", title: "Der Werwolf gewinnt!", text: "Das Dorf konnte ihn nicht aufhalten." },
 };
 
-function iWon(view: View, winner: Winner): boolean {
-  const { me, lovers } = view;
-  if (winner === "niemand" || !me.role) return false;
-  if (winner === "paar") return lovers?.includes(me.id) ?? false;
-  return ROLES[me.role].team === winner;
-}
-
 export function EndedPhase({ view, api }: PhaseProps) {
+  const [history, setHistory] = useState(false);
   if (!view.ended) return null;
-  const { winner, noses } = view.ended;
-  const loneWolf = view.players.filter((p) => p.role === "werwolf").length === 1;
+  const { winner, winners, noses, center } = view.ended;
+  const loneWolf = view.players.filter((p) => p.pack).length === 1;
   const ending = (loneWolf && LONE_WOLF_ENDING[winner]) || ENDING[winner];
   const host = view.players.find((p) => p.host);
   const best = noses.filter((n) => n.hits > 0 && n.hits === noses[0].hits);
+  const won = winners.includes(view.me.id);
 
   return (
     <>
@@ -323,9 +446,11 @@ export function EndedPhase({ view, api }: PhaseProps) {
         {ending.emoji}
       </div>
       <Title sub={ending.text}>{ending.title}</Title>
-      <p className="text-center text-xl font-extrabold text-accent">
-        {iWon(view, winner) ? "Du hast gewonnen! 🏆" : winner === "niemand" ? "" : "Diesmal hat es nicht gereicht."}
-      </p>
+      {winner !== "niemand" && (
+        <p className="text-center text-xl font-extrabold text-accent">
+          {won ? "Du hast gewonnen! 🏆" : "Diesmal hat es nicht gereicht."}
+        </p>
+      )}
 
       <section className="space-y-2">
         <h2 className="px-1 font-extrabold text-ink-soft">Wer war was?</h2>
@@ -333,8 +458,14 @@ export function EndedPhase({ view, api }: PhaseProps) {
           players={view.players}
           meId={view.me.id}
           revealAll
-          badge={(p) => view.lovers?.includes(p.id) && <span title="verliebt">💘</span>}
+          secrets
+          badge={(p) => winners.includes(p.id) && <span title="gewonnen">🏆</span>}
         />
+        {center.length > 0 && (
+          <p className="px-1 text-sm text-ink-soft">
+            Übrig beim Dieb: {center.map((r) => `${ROLES[r].emoji} ${ROLES[r].name}`).join(", ")}
+          </p>
+        )}
       </section>
 
       {best.length > 0 && (
@@ -343,10 +474,27 @@ export function EndedPhase({ view, api }: PhaseProps) {
           <p className="font-extrabold">Beste Spürnase</p>
           <p className="text-ink-soft">
             {best.map((n) => nameOf(view, n.id)).join(" und ")} {best.length > 1 ? "haben" : "hat"} nachts{" "}
-            {best[0].hits}× richtig auf einen Werwolf getippt.
+            {best[0].hits}× richtig auf einen Wolf getippt.
           </p>
         </Card>
       )}
+
+      <Card>
+        <button
+          type="button"
+          onClick={() => setHistory((h) => !h)}
+          aria-expanded={history}
+          className="flex min-h-11 w-full items-center justify-between font-extrabold"
+        >
+          📜 Spielverlauf
+          <span aria-hidden>{history ? "▲" : "▼"}</span>
+        </button>
+        {history && (
+          <div className="mt-3">
+            <History entries={view.history} />
+          </div>
+        )}
+      </Card>
 
       <div className="mt-auto">
         {view.me.host ? (

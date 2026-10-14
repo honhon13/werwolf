@@ -104,6 +104,21 @@ interface PlayerGridProps {
   revealAll?: boolean;
   /** Mark players whose phone has stopped answering. */
   showOffline?: boolean;
+  /** Mark players who said they are ready (lobby). */
+  showReady?: boolean;
+  /** Also mark the pack, the lovers and the enchanted, as far as this viewer knows them. */
+  secrets?: boolean;
+}
+
+/** Small public markers next to a name: Hauptmann and a Dorfdepp without vote. */
+function markers(p: PublicPlayer, secrets: boolean) {
+  const marks: string[] = [];
+  if (p.captain) marks.push("🎖️");
+  if (p.exposed) marks.push("🤪");
+  if (secrets && p.pack) marks.push("🐺");
+  if (secrets && p.lover) marks.push("💘");
+  if (secrets && p.enchanted) marks.push("🎶");
+  return marks.join(" ");
 }
 
 export function PlayerGrid({
@@ -115,6 +130,8 @@ export function PlayerGrid({
   meId,
   revealAll = false,
   showOffline = false,
+  showReady = false,
+  secrets = false,
 }: PlayerGridProps) {
   return (
     <ul className="grid grid-cols-2 gap-2.5">
@@ -122,12 +139,20 @@ export function PlayerGrid({
         const isSelected = selected.includes(p.id);
         const off = !onPick || disabled?.(p);
         const role = revealAll || !p.alive ? p.role : null;
-        const notes = [p.id === meId && "du", showOffline && !p.online && "offline"].filter(Boolean);
+        const notes = [
+          p.id === meId && "du",
+          showReady && p.ready && "✓ bereit",
+          showOffline && !p.online && "offline",
+        ].filter(Boolean);
+        const marks = markers(p, secrets);
         const body = (
           <>
             <Avatar player={p} />
             <span className="min-w-0 flex-1 text-left">
-              <span className="block truncate font-extrabold">{p.name}</span>
+              <span className="block truncate font-extrabold">
+                {p.name}
+                {marks && <span className="ml-1 font-normal">{marks}</span>}
+              </span>
               {(role || notes.length > 0) && (
                 <span className="block truncate text-sm text-ink-soft">
                   {role && <RoleTag role={role} />}

@@ -2,7 +2,8 @@
 
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import type { Action, RoleSetup } from "@/lib/game/types";
+import { CAPTAIN_TEXT, CATEGORY_NAMES, type Category, NOT_AVAILABLE, ROLE_ORDER, ROLES, SOURCE_NAMES } from "@/lib/game/roles";
+import type { Action, RoleId, View } from "@/lib/game/types";
 import { Button, Card, cx, PlayerGrid, RoleChips } from "../ui";
 import type { PhaseProps } from "./shared";
 
@@ -11,13 +12,6 @@ const TIMES = [
   { seconds: 180, label: "3 Min" },
   { seconds: 300, label: "5 Min" },
   { seconds: 0, label: "Ohne" },
-];
-
-const SPECIALS: { key: Exclude<keyof RoleSetup, "wolves">; label: string }[] = [
-  { key: "seherin", label: "🔮 Seherin" },
-  { key: "hexe", label: "🧪 Hexe" },
-  { key: "jaeger", label: "🏹 Jäger" },
-  { key: "amor", label: "💘 Amor" },
 ];
 
 function Segmented<T extends string | number | boolean>({
@@ -106,12 +100,175 @@ function Invite({ code }: { code: string }) {
   );
 }
 
+type Change = Extract<Action, { type: "settings" }>["settings"];
+
+function Switch({
+  on,
+  label,
+  hint,
+  onChange,
+}: {
+  on: boolean;
+  label: string;
+  hint: string;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="flex w-full items-center gap-3 rounded-2xl border border-line bg-card px-3 py-2.5 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block font-extrabold">{label}</span>
+        <span className="block text-sm text-ink-soft">{hint}</span>
+      </span>
+      <span
+        aria-hidden
+        className={cx(
+          "relative h-7 w-12 shrink-0 rounded-full transition",
+          on ? "bg-accent" : "bg-card-strong",
+        )}
+      >
+        <span
+          className={cx(
+            "absolute top-1 size-5 rounded-full bg-white shadow transition-all",
+            on ? "left-6" : "left-1",
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
+const SMALL_TEXT = {
+  kurz: "Kurzrunde zu dritt: In der Nacht scheidet niemand aus. Die Seherin findet den Werwolf – und am Tag habt ihr genau eine Abstimmung, um ihn zu verbannen.",
+  vier: "Runde zu viert: Werwolf, Seherin, Beschützer und Dorfbewohner. In der ersten Nacht scheidet höchstens einer aus – es kommt also immer zu einer Abstimmung.",
+};
+
+/** Lets the host pick how often each role is in the game. */
+function RoleEditor({ view, change }: { view: View; change: (c: Change) => void }) {
+  const [info, setInfo] = useState<RoleId | null>(null);
+  const [hidden, setHidden] = useState(true);
+  const { setup } = view;
+  const counts = setup.counts;
+  const set = (role: RoleId, n: number) => change({ counts: { ...counts, [role]: Math.max(0, n) } });
+  const diff = setup.needed - setup.chosen;
+  const groups = (Object.keys(CATEGORY_NAMES) as Category[]).map((category) => ({
+    category,
+    roles: ROLE_ORDER.filter((r) => ROLES[r].category === category),
+  }));
+
+  return (
+    <div className="space-y-4">
+      <p className={cx("text-center font-extrabold", diff === 0 ? "text-good" : "text-accent")} role="status">
+        {setup.chosen} von {setup.needed} Karten gewählt
+        {diff > 0 ? ` – noch ${diff} ${diff === 1 ? "fehlt" : "fehlen"}` : diff < 0 ? ` – ${-diff} zu viel` : " ✓"}
+      </p>
+      {(counts.dieb ?? 0) > 0 && (
+        <p className="text-center text-sm text-ink-soft">Mit dem Dieb liegen zwei Karten mehr im Spiel, als es Spieler gibt.</p>
+      )}
+      {groups.map(({ category, roles }) => (
+        <div key={category} className="space-y-1.5">
+          <h3 className="px-1 text-sm font-extrabold tracking-wide text-ink-soft uppercase">{CATEGORY_NAMES[category]}</h3>
+          {roles.map((role) => {
+            const r = ROLES[role];
+            const n = counts[role] ?? 0;
+            const unique = r.max === 1;
+            return (
+              <div key={role} className="rounded-2xl border border-line bg-card">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setInfo(info === role ? null : role)}
+                    aria-expanded={info === role}
+                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="text-2xl" aria-hidden>
+                      {r.emoji}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-extrabold">{r.name}</span>
+                      <span className="block truncate text-xs text-ink-soft">
+                        {SOURCE_NAMES[r.source]}
+                        {r.adapted ? " · Digitalregel" : ""} · ⓘ
+                      </span>
+                    </span>
+                  </button>
+                  {unique ? (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={n > 0}
+                      aria-label={`${r.name} ${n > 0 ? "entfernen" : "hinzufügen"}`}
+                      onClick={() => set(role, n > 0 ? 0 : 1)}
+                      className={cx(
+                        "min-h-11 min-w-20 rounded-xl border px-3 text-sm font-extrabold",
+                        n > 0 ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-soft",
+                      )}
+                    >
+                      {n > 0 ? "Dabei" : "Nicht dabei"}
+                    </button>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={`Ein ${r.name} weniger`}
+                        disabled={n <= 0}
+                        onClick={() => set(role, n - 1)}
+                        className="size-11 rounded-full border border-line text-2xl font-extrabold disabled:opacity-30"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-xl font-extrabold">{n}</span>
+                      <button
+                        type="button"
+                        aria-label={`Ein ${r.name} mehr`}
+                        disabled={n >= view.setup.max}
+                        onClick={() => set(role, n + 1)}
+                        className="size-11 rounded-full border border-line text-2xl font-extrabold disabled:opacity-30"
+                      >
+                        +
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {info === role && <p className="px-3 pb-3 text-sm leading-snug">{r.text}</p>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setHidden((h) => !h)}
+          aria-expanded={!hidden}
+          className="px-1 text-sm font-extrabold tracking-wide text-ink-soft uppercase"
+        >
+          Nicht auswählbar ({NOT_AVAILABLE.length}) {hidden ? "▼" : "▲"}
+        </button>
+        {!hidden &&
+          NOT_AVAILABLE.map((r) => (
+            <p key={r.name} className="rounded-2xl border border-dashed border-line px-3 py-2 text-sm text-ink-soft">
+              <b className="text-ink">{r.name}:</b> {r.reason}
+            </p>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 export function Lobby({ view, api }: PhaseProps) {
   const { setup, me, players } = view;
   const host = players.find((p) => p.host);
-  const change = (settings: Extract<Action, { type: "settings" }>["settings"]) =>
-    api.send({ type: "settings", settings });
-  const setCustom = (custom: Partial<RoleSetup>) => change({ custom });
+  const change = (settings: Change) => api.send({ type: "settings", settings });
+  const small = setup.mode !== "normal";
+  const meReady = players.find((p) => p.id === me.id)?.ready ?? false;
+  const notReady = players.filter((p) => !p.ready).length;
+  const seats = setup.roles?.some((r) => r === "fuchs" || r === "baerenfuehrer" || r === "ritter");
 
   return (
     <>
@@ -119,12 +276,16 @@ export function Lobby({ view, api }: PhaseProps) {
 
       <section className="space-y-2">
         <h2 className="px-1 text-lg font-extrabold">
-          Am Lagerfeuer <span className="text-ink-soft">({players.length})</span>
+          Am Lagerfeuer{" "}
+          <span className="text-ink-soft">
+            ({players.length}, {players.length - notReady} bereit)
+          </span>
         </h2>
         <PlayerGrid
           players={players}
           meId={me.id}
           showOffline
+          showReady
           badge={(p) => (
             <span className="flex items-center gap-1.5">
               {p.host && <span title="Spielleitung">👑</span>}
@@ -141,6 +302,14 @@ export function Lobby({ view, api }: PhaseProps) {
             </span>
           )}
         />
+        {seats && (
+          <p className="px-1 text-sm text-ink-soft">
+            Die Reihenfolge dieser Liste ist die Sitzreihenfolge – wichtig für Fuchs, Bärenführer und Ritter.
+          </p>
+        )}
+        <Button variant={meReady ? "quiet" : "primary"} onClick={() => api.send({ type: "ready", ready: !meReady })}>
+          {meReady ? "Doch nicht bereit" : "Ich bin bereit"}
+        </Button>
       </section>
 
       <Card className="space-y-3">
@@ -148,77 +317,38 @@ export function Lobby({ view, api }: PhaseProps) {
         {setup.roles ? (
           <RoleChips roles={setup.roles} />
         ) : (
-          <p className="text-center font-bold text-ink-soft">{setup.error}</p>
+          <p className="text-center font-bold text-danger">{setup.error}</p>
         )}
-        {view.short && (
-          <p className="text-center text-ink-soft">
-            <b className="text-ink">Kurzrunde zu dritt:</b> In der Nacht scheidet niemand aus. Die
-            Seherin findet den Werwolf – und am Tag habt ihr genau eine Abstimmung, um ihn zu
-            verbannen.
+        {small && <p className="text-center text-ink-soft">{SMALL_TEXT[setup.mode as "kurz" | "vier"]}</p>}
+        {!small && setup.roles && (
+          <p className="text-center text-sm text-ink-soft">
+            {setup.captain ? "🎖️ Mit Hauptmannwahl" : "Ohne Hauptmann"} ·{" "}
+            {setup.decoy ? "Tarnmodus an" : "Tarnmodus aus"}
           </p>
         )}
 
         {me.host && (
           <div className="space-y-3 border-t border-line pt-3">
-            {!view.short && (
-              <Segmented
-                value={setup.auto}
-                options={[
-                  { value: true, label: "Automatisch" },
-                  { value: false, label: "Selbst wählen" },
-                ]}
-                onChange={(auto) => change({ auto })}
-              />
-            )}
-            {!view.short && !setup.auto && (
+            {!small && (
               <>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-extrabold">🐺 Werwölfe</span>
-                  <span className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      aria-label="Weniger Werwölfe"
-                      disabled={setup.custom.wolves <= 1}
-                      onClick={() => setCustom({ wolves: setup.custom.wolves - 1 })}
-                      className="size-11 rounded-full border border-line bg-card text-2xl font-extrabold disabled:opacity-30"
-                    >
-                      −
-                    </button>
-                    <span className="w-6 text-center text-2xl font-extrabold">{setup.custom.wolves}</span>
-                    <button
-                      type="button"
-                      aria-label="Mehr Werwölfe"
-                      disabled={setup.custom.wolves >= 6}
-                      onClick={() => setCustom({ wolves: setup.custom.wolves + 1 })}
-                      className="size-11 rounded-full border border-line bg-card text-2xl font-extrabold disabled:opacity-30"
-                    >
-                      +
-                    </button>
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {SPECIALS.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-pressed={setup.custom[key]}
-                      onClick={() => setCustom({ [key]: !setup.custom[key] })}
-                      className={cx(
-                        "min-h-12 rounded-2xl border px-3 font-extrabold transition",
-                        setup.custom[key]
-                          ? "border-accent bg-accent/20"
-                          : "border-line bg-card text-ink-soft line-through",
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {setup.roles === null && players.length >= setup.min && (
-                  <p className="text-center font-bold text-danger">{setup.error}</p>
-                )}
+                <Segmented
+                  value={setup.auto}
+                  options={[
+                    { value: true, label: "Automatisch" },
+                    { value: false, label: "Selbst wählen" },
+                  ]}
+                  onChange={(auto) => change({ auto })}
+                />
+                {!setup.auto && <RoleEditor view={view} change={change} />}
+                <Switch on={setup.captain} label="🎖️ Hauptmann wählen" hint={CAPTAIN_TEXT} onChange={(captain) => change({ captain })} />
               </>
             )}
+            <Switch
+              on={setup.decoy}
+              label="🌙 Tarnmodus"
+              hint="Wer nachts keine Aufgabe hat, tippt trotzdem etwas – so verrät am Tisch niemand seine Rolle."
+              onChange={(decoy) => change({ decoy })}
+            />
             <div>
               <p className="mb-1.5 text-sm font-bold text-ink-soft">Zeit zum Diskutieren</p>
               <Segmented
@@ -233,9 +363,16 @@ export function Lobby({ view, api }: PhaseProps) {
 
       <div className="mt-auto space-y-2 pt-2">
         {me.host ? (
-          <Button disabled={!setup.roles || api.busy} onClick={() => api.send({ type: "start" })}>
-            Spiel starten
-          </Button>
+          <>
+            <Button disabled={!setup.roles || api.busy} onClick={() => api.send({ type: "start" })}>
+              Spiel starten
+            </Button>
+            {setup.roles && notReady > 0 && (
+              <p className="text-center text-sm text-ink-soft">
+                {notReady === 1 ? "Einer ist" : `${notReady} sind`} noch nicht bereit – du kannst trotzdem starten.
+              </p>
+            )}
+          </>
         ) : (
           <p className="py-3 text-center text-lg font-bold text-ink-soft">
             {host ? `${host.name} startet gleich das Spiel …` : "Gleich geht es los …"}

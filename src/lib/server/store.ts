@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { normalize } from "../game/engine";
 import type { GameState } from "../game/types";
 
 export interface Room {
@@ -80,7 +81,7 @@ function neonStore(url: string): Store {
         : await sql.query(`SELECT version, state, seen FROM werwolf_rooms WHERE code = $1`, [code]);
       const row = rows[0];
       if (!row) return null;
-      return { state: row.state as GameState, version: row.version, seen: row.seen ?? {} };
+      return { state: normalize(row.state as GameState), version: row.version, seen: row.seen ?? {} };
     },
 
     async write(code, version, state) {
@@ -113,6 +114,7 @@ function memoryStore(): Store {
       const room = rooms.get(code);
       if (!room) return null;
       const snapshot = structuredClone(room);
+      snapshot.state = normalize(snapshot.state);
       if (
         touch &&
         room.state.players.some((p) => p.id === touch.id && p.tokenHash === touch.tokenHash)

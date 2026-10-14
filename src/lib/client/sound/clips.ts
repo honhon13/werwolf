@@ -45,15 +45,26 @@ export function clipFor(view: View): ClipId | null {
     case "roles":
       return "rollen";
     case "night":
+      // Only at nightfall and when the Hexe wakes; the other steps stay quiet.
+      if (view.step === "hexe") return "hexe";
+      if (!view.firstStep) return null;
       return view.round === 1 ? "nachtErste" : "nacht";
-    case "witch":
-      return "hexe";
     case "announce": {
-      if (!view.announce) return null;
-      const nobody = view.announce.deaths.length === 0;
-      if (view.announce.kind === "morning") return nobody ? "morgenRuhig" : "morgenOpfer";
-      if (view.announce.kind === "hunter") return "jaegerSchuss";
-      return nobody ? "urteilNiemand" : "urteilVerbannt";
+      const a = view.announce;
+      if (!a) return null;
+      const nobody = a.deaths.length === 0;
+      switch (a.kind) {
+        case "morning":
+          return nobody ? "morgenRuhig" : "morgenOpfer";
+        case "hunter":
+          return "jaegerSchuss";
+        case "verdict":
+          // A Dorfdepp who stays is neither of the two recordings.
+          if (a.exposed) return null;
+          return nobody ? "urteilNiemand" : "urteilVerbannt";
+        default:
+          return null;
+      }
     }
     case "hunter":
       return "jaeger";

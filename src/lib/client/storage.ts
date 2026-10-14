@@ -10,6 +10,10 @@ export interface RoomCredentials {
   token: string;
 }
 
+export function stored(key: string): string | null {
+  return read(key);
+}
+
 function read(key: string): string | null {
   try {
     return window.localStorage.getItem(PREFIX + key);

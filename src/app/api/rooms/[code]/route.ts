@@ -35,10 +35,12 @@ export async function GET(request: Request, ctx: RouteContext<"/api/rooms/[code]
 
     const me = member(room.state, creds);
     if (!me) {
+      const online = onlineIds(room, now);
       const guest: GuestResponse = {
         member: false,
         phase: room.state.phase,
         players: room.state.players.map((p) => p.name),
+        seats: room.state.players.map((p) => ({ id: p.id, name: p.name, online: online.has(p.id) })),
       };
       return json(guest);
     }

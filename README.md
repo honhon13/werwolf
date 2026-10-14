@@ -4,14 +4,16 @@ Das Werwolf-Spiel fürs Handy: Jeder spielt auf seinem eigenen Gerät, die App
 übernimmt die Spielleitung. Ein Kind macht einen Raum auf, die anderen treten
 mit dem vierstelligen Code oder per QR-Code bei – ohne Konto.
 
-## Rollen
+## Rollen und Regeln
 
-Werwolf, Dorfbewohner, Seherin, Hexe, Jäger und Amor. Die Rollen werden passend
-zur Spielerzahl verteilt (ab 4 Spielern) oder von der Spielleitung selbst gewählt.
+24 Rollen aus dem Grundspiel und den Erweiterungen Neumond und Charaktere,
+dazu der Hauptmann. 3 bis 18 Spieler: Zu dritt gibt es eine Kurzrunde, zu
+viert eine feste Viererrunde, ab 5 Spielern verteilt die App eine ausgewogene
+Besetzung oder die Spielleitung stellt die Rollen selbst zusammen – ohne zu
+erfahren, wer welche Karte bekommt.
 
-Zu dritt gibt es eine Kurzrunde mit Werwolf, Seherin und Dorfbewohner: In der
-Nacht scheidet niemand aus, die Seherin erfährt, wer der Werwolf ist, und am Tag
-entscheidet eine einzige Abstimmung. Wird der Werwolf nicht verbannt, gewinnt er.
+Welche Regeln genau gelten, auch dort, wo die gedruckten Regeln offen sind,
+steht verbindlich in [REGELN.md](REGELN.md).
 
 ## Entwickeln
 
@@ -46,10 +48,13 @@ die Musik lässt sich im Menü getrennt abstellen.
 
 ## Aufbau
 
-- `src/lib/game` – die Spielregeln als reine Funktionen (`engine.ts`) und was
+- `src/lib/game` – die Spielregeln als reine Funktionen: Rollen und Besetzung
+  (`roles.ts`), Nacht (`night.ts`), Tag und Abstimmung (`day.ts`), Tod und
+  seine Folgen (`death.ts`), Sieg (`win.ts`), Ablauf (`engine.ts`) und was
   jeder Spieler sehen darf (`view.ts`). Geheimes verlässt den Server nie.
 - `src/lib/server` – Speicherung der Räume und Hilfen für die API.
-- `src/app/api/rooms` – Raum anlegen, beitreten, Stand abfragen, Aktion senden.
+- `src/app/api/rooms` – Raum anlegen, beitreten, Stand abfragen, Aktion senden,
+  Platz auf einem neuen Gerät übernehmen.
 - `src/components` – die Bildschirme der einzelnen Spielphasen.
 - `src/lib/client/sound` – Erzähler-Aufnahmen, Ersatzstimme und Musik.
 

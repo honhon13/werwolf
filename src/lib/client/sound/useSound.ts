@@ -28,7 +28,7 @@ export function useSoundSettings() {
 /** Plays the narrator for each new moment and the music for the time of day. */
 export function useGameSound(view: View, mood: Mood) {
   const { on, music } = useSoundSettings();
-  const moment = [view.phase, view.round, view.announce?.kind, view.vote?.round].join(":");
+  const moment = [view.phase, view.round, view.step, view.announce?.kind, view.vote?.kind, view.vote?.round].join(":");
   const clip = clipFor(view);
   const text = narration(view);
   const told = useRef(moment);

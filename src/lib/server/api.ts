@@ -77,6 +77,8 @@ export interface GuestResponse {
   member: false;
   phase: GameState["phase"];
   players: string[];
+  /** Seats someone who lost their device can ask to take over. */
+  seats: { id: string; name: string; online: boolean }[];
 }
 
 export function memberResponse(room: Room, playerId: string, knownVersion?: number): MemberResponse {

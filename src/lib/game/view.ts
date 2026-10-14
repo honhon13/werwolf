@@ -1,17 +1,13 @@
-import { ackers, nightDone, nightTask } from "./engine";
-import { composition, MAX_PLAYERS, MIN_PLAYERS, ROLE_ORDER, SHORT_ROUND_PLAYERS } from "./roles";
-import type { GameState, Player, RoleId, View } from "./types";
+import { voters } from "./day";
+import { ackers, openRejoins } from "./engine";
+import { attacked, enchantable, playerDone, prey, taskDone, tasksOf, wolfConsensus } from "./night";
+import { cards, cardsNeeded, composition, MAX_PLAYERS, MIN_PLAYERS, modeFor, ROLE_ORDER, ROLES } from "./roles";
+import { find, inPack, living, neighbours, teamOf } from "./state";
+import type { GameState, Player, RoleId, Task, TaskId, View } from "./types";
 
-/** Dead players watch as ghosts, except a hunter who still has to aim. */
+/** Dead players watch as ghosts, except while they still have a choice to make. */
 function isGhost(s: GameState, p: Player) {
-  return !p.alive && s.hunterPending !== p.id;
-}
-
-function canSeeRole(s: GameState, viewer: Player, target: Player): boolean {
-  if (target.id === viewer.id || s.phase === "ended") return true;
-  if (!target.alive) return true;
-  if (isGhost(s, viewer)) return true;
-  return viewer.role === "werwolf" && target.role === "werwolf";
+  return !p.alive && s.pending[0]?.who !== p.id;
 }
 
 function isDone(s: GameState, p: Player): boolean {
@@ -21,10 +17,9 @@ function isDone(s: GameState, p: Player): boolean {
     case "discussion":
       return s.acks.includes(p.id);
     case "night":
-      return p.alive && nightDone(s, p);
-    case "witch":
-      return p.role === "hexe" && p.alive ? s.night.witch !== null : s.acks.includes(p.id);
+      return playerDone(s, p);
     case "vote":
+    case "election":
       return p.id in s.vote.ballots;
     default:
       return false;
@@ -32,7 +27,6 @@ function isDone(s: GameState, p: Player): boolean {
 }
 
 function progress(s: GameState): View["progress"] {
-  const alive = s.players.filter((p) => p.alive);
   switch (s.phase) {
     case "roles":
     case "announce":
@@ -40,15 +34,121 @@ function progress(s: GameState): View["progress"] {
       const need = ackers(s);
       return { done: need.filter((p) => s.acks.includes(p.id)).length, total: need.length };
     }
-    case "night":
-    case "witch":
+    case "night": {
+      const busy = living(s).filter((p) => tasksOf(s, p).length > 0);
+      return { done: busy.filter((p) => playerDone(s, p)).length, total: busy.length };
+    }
     case "vote":
-      return { done: alive.filter((p) => isDone(s, p)).length, total: alive.length };
+    case "election": {
+      const need = voters(s);
+      return { done: need.filter((p) => p.id in s.vote.ballots).length, total: need.length };
+    }
     case "hunter":
+    case "succession":
+    case "scapegoat":
       return { done: 0, total: 1 };
     default:
       return { done: 0, total: 0 };
   }
+}
+
+/** One night task as the page needs it: whom to pick, how many, what else. */
+function describe(s: GameState, me: Player, id: TaskId): Task {
+  const others = living(s)
+    .filter((p) => p.id !== me.id)
+    .map((p) => p.id);
+  const all = living(s).map((p) => p.id);
+  const task: Task = { id, targets: [], count: [1, 1], options: [], mayPass: false, done: taskDone(s, me, id) };
+  switch (id) {
+    case "dieb": {
+      const both = s.center.every((r) => ROLES[r].hunts);
+      task.count = [0, 0];
+      task.options = s.center.map((role, i) => ({ id: String(i), label: ROLES[role].name, role }));
+      if (!both) task.options.push({ id: "keep", label: "Meine Karte behalten" });
+      break;
+    }
+    case "amor":
+      task.targets = all;
+      task.count = [2, 2];
+      break;
+    case "wolfshund":
+      task.count = [0, 0];
+      task.options = [
+        { id: "dorf", label: "Beim Dorf bleiben" },
+        { id: "wolf", label: "Mit den Wölfen jagen" },
+      ];
+      break;
+    case "wolf":
+      task.targets = prey(s).map((p) => p.id);
+      task.wolfVotes = { ...s.night.wolfVotes };
+      task.pick = s.night.wolfVotes[me.id] ? [s.night.wolfVotes[me.id]] : [];
+      task.done = wolfConsensus(s) !== null;
+      break;
+    case "sleep":
+      task.count = [0, 0];
+      break;
+    case "beschuetzer":
+      task.targets = all.filter((id) => id !== s.lastProtected);
+      task.blocked = s.lastProtected;
+      break;
+    case "fuchs":
+      task.targets = all;
+      break;
+    case "rabe":
+      task.targets = others;
+      task.count = [0, 1];
+      task.mayPass = true;
+      break;
+    case "weisserWolf":
+      task.targets = living(s)
+        .filter((p) => inPack(p) && p.id !== me.id)
+        .map((p) => p.id);
+      task.count = [0, 1];
+      task.mayPass = true;
+      break;
+    case "floetenspieler": {
+      const open = enchantable(s, me).map((p) => p.id);
+      const need = Math.min(2, open.length);
+      task.targets = open;
+      task.count = [need, need];
+      break;
+    }
+    case "schauspieler":
+      task.targets = all;
+      task.options = s.actorPowers.map((role) => ({ id: role, label: ROLES[role].name, role }));
+      task.mayPass = true;
+      break;
+    case "maedchen":
+      task.count = [0, 0];
+      task.options = [
+        { id: "spy", label: "Lauschen" },
+        { id: "stay", label: "Weiterschlafen" },
+      ];
+      break;
+    case "urwolf":
+      task.count = [0, 0];
+      task.victim = s.night.victim;
+      task.options = [
+        { id: "infect", label: "Infizieren" },
+        { id: "kill", label: "Nicht infizieren" },
+      ];
+      break;
+    case "grosserWolf":
+      task.targets = prey(s)
+        .filter((p) => p.id !== s.night.victim)
+        .map((p) => p.id);
+      break;
+    case "hexe":
+      task.targets = others;
+      task.count = [0, 1];
+      task.attacked = attacked(s);
+      task.potions = { ...s.potions };
+      break;
+    default:
+      // wildesKind, seherin, lurk, suspect
+      task.targets = others;
+  }
+  return task;
 }
 
 /** Builds what one player may see. Everything secret is filtered out here. */
@@ -57,87 +157,64 @@ export function viewFor(
   playerId: string,
   ctx: { now: number; online: Set<string> },
 ): View | null {
-  const me = s.players.find((p) => p.id === playerId);
+  const me = find(s, playerId);
   if (!me) return null;
   const ghost = isGhost(s, me);
   const over = s.phase === "ended";
-  // Revealing who is finished at night would expose wolves and the witch.
-  const doneIsPublic = s.phase !== "night" && s.phase !== "witch";
-  const comp = composition(s.players.length, s.settings);
+  const lobby = s.phase === "lobby";
+  const all = over || ghost;
+  const n = s.players.length;
+  const comp = composition(n, s.settings);
+  const chosen = cards(s.settings.counts);
+  const myPack = inPack(me) && !lobby;
+  const lover = (p: Player) => Boolean(s.lovers?.includes(p.id));
+  const seesLovers = all || lover(me) || me.role === "amor";
+  const seesEnchanted = all || me.enchanted || me.role === "floetenspieler";
+  const canSeeRole = (p: Player) => p.id === me.id || all || !p.alive;
 
-  const dealt = s.players.map((p) => p.role).filter((r): r is RoleId => r !== null);
-  const inPlay =
-    s.phase === "lobby"
-      ? (comp.roles ?? [])
-      : dealt.sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
-
-  const loverId =
-    s.lovers && s.lovers.includes(me.id)
-      ? s.lovers[0] === me.id
-        ? s.lovers[1]
-        : s.lovers[0]
-      : null;
-  const seesLovers = over || ghost || me.role === "amor";
-
-  let night: View["night"] = null;
-  if (s.phase === "night" && me.alive) {
-    const task = nightTask(s, me);
-    const peek = s.seerLog.find((e) => e.round === s.round);
-    night = {
-      task: task === "lurk" ? "suspect" : task,
-      lurking: task === "lurk",
-      pick:
-        task === "wolf"
-          ? (s.night.wolfVotes[me.id] ?? null)
-          : task === "seer"
-            ? (peek?.target ?? null)
-            : task === "suspect" || task === "lurk"
-              ? (s.night.suspects[me.id] ?? null)
-              : null,
-      wolfVotes: task === "wolf" ? s.night.wolfVotes : null,
-      amorPicked: s.night.amorDone,
-    };
-  }
-
-  let witch: View["witch"] = null;
-  if (s.phase === "witch" && me.alive) {
-    const isWitch = me.role === "hexe";
-    witch = {
-      isWitch,
-      victim: isWitch ? s.night.victim : null,
-      canHeal: isWitch && s.potions.heal && s.night.victim !== null,
-      canPoison: isWitch && s.potions.poison,
-    };
-  }
+  const dealt = [...s.players.map((p) => p.role), ...s.center].filter((r): r is RoleId => r !== null);
+  const inPlay = (lobby ? (comp.roles ?? []) : dealt).sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+  const showsNeighbours = me.role === "fuchs" || me.role === "baerenfuehrer" || me.role === "ritter";
 
   const noses = over
     ? s.players
         .map((p) => {
           const tips = s.suspicions.filter((t) => t.by === p.id);
-          const hits = tips.filter(
-            (t) => s.players.find((x) => x.id === t.target)?.role === "werwolf",
-          ).length;
+          const hits = tips.filter((t) => {
+            const target = find(s, t.target);
+            return target ? inPack(target) : false;
+          }).length;
           return { id: p.id, hits, total: tips.length };
         })
-        .filter((n) => n.total > 0)
+        .filter((x) => x.total > 0)
         .sort((a, b) => b.hits - a.hits)
     : [];
+
+  const voting = s.phase === "vote" || s.phase === "election";
+  const deciding = s.phase === "hunter" || s.phase === "succession" || s.phase === "scapegoat";
 
   return {
     code: s.code,
     phase: s.phase,
-    // Rooms saved before short rounds existed have no flag yet.
-    short: s.phase === "lobby" ? s.players.length === SHORT_ROUND_PLAYERS : Boolean(s.short),
+    mode: lobby ? modeFor(n) : s.mode,
+    short: lobby ? modeFor(n) === "kurz" : s.mode === "kurz",
     round: s.round,
+    step: s.phase === "night" ? s.night.step : null,
+    firstStep: s.phase === "night" && s.night.ran.length === 1,
     now: ctx.now,
     deadline: s.deadline,
     me: {
       id: me.id,
       name: me.name,
       role: me.role,
+      team: me.role ? teamOf(s, me) : null,
       alive: me.alive,
       host: s.hostId === me.id,
-      loverId,
+      loverId: lover(me) ? (s.lovers!.find((id) => id !== me.id) ?? me.id) : null,
+      pack: myPack,
+      enchanted: me.enchanted,
+      exposed: me.exposed,
+      canVote: voting && voters(s).some((p) => p.id === me.id),
       done: isDone(s, me),
     },
     players: s.players.map((p) => ({
@@ -146,37 +223,60 @@ export function viewFor(
       alive: p.alive,
       host: s.hostId === p.id,
       online: ctx.online.has(p.id),
-      role: canSeeRole(s, me, p) ? p.role : null,
-      done: doneIsPublic && isDone(s, p),
+      ready: s.ready.includes(p.id),
+      role: canSeeRole(p) ? p.role : null,
+      pack: inPack(p) && !lobby && (all || myPack),
+      enchanted: p.enchanted && seesEnchanted,
+      lover: lover(p) && seesLovers,
+      captain: s.captain === p.id,
+      exposed: p.exposed,
+      // Who is finished at night would expose who has a role.
+      done: s.phase !== "night" && isDone(s, p),
     })),
     progress: progress(s),
     setup: {
       auto: s.settings.auto,
-      custom: s.settings.custom,
+      counts: s.settings.counts,
+      captain: s.settings.captain,
+      decoy: s.settings.decoy,
       discussionSeconds: s.settings.discussionSeconds,
+      mode: modeFor(n),
       roles: comp.roles,
       error: comp.error,
+      needed: cardsNeeded(n, s.settings.auto ? [] : chosen),
+      chosen: chosen.length,
       min: MIN_PLAYERS,
       max: MAX_PLAYERS,
     },
     inPlay,
     lovers: seesLovers ? s.lovers : null,
-    night,
-    witch,
+    tasks: tasksOf(s, me).map((id) => describe(s, me, id)),
+    notes: s.notes[me.id] ?? [],
     potions: me.role === "hexe" ? s.potions : null,
-    seerLog: me.role === "seherin" ? s.seerLog : null,
-    announce: s.phase === "announce" || s.phase === "hunter" ? s.announce : null,
-    hunterId: s.phase === "hunter" ? s.hunterPending : null,
-    vote:
-      s.phase === "vote"
-        ? {
-            round: s.vote.round,
-            candidates: s.vote.candidates,
-            voted: Object.keys(s.vote.ballots),
-            myBallot: s.vote.ballots[me.id],
-            previous: s.vote.previous,
-          }
-        : null,
-    ended: over && s.winner ? { winner: s.winner, noses } : null,
+    actorPowers: me.role === "schauspieler" ? s.actorPowers : null,
+    wildModel: me.role === "wildesKind" ? s.wildModel : null,
+    neighbours: showsNeighbours && !lobby ? neighbours(s, me.id).map((p) => p.id) : null,
+    announce: s.phase === "announce" ? s.announce : null,
+    pending: deciding ? (s.pending[0] ?? null) : null,
+    captain: s.captain,
+    powersLost: s.powersLost,
+    vote: voting
+      ? {
+          kind: s.vote.kind,
+          round: s.vote.round,
+          candidates: s.vote.candidates,
+          voted: Object.keys(s.vote.ballots),
+          myBallot: s.vote.ballots[me.id],
+          previous: s.vote.previous,
+          voters: voters(s).map((p) => p.id),
+          marked: s.vote.kind === "lynch" && s.vote.round === 1 ? s.marks : [],
+        }
+      : null,
+    rejoins:
+      s.hostId === me.id
+        ? openRejoins(s, ctx.now).map((r) => ({ id: r.id, name: find(s, r.playerId)?.name ?? "?" }))
+        : [],
+    history: s.history.filter((h) => over || !h.secret),
+    ended: over && s.winner ? { winner: s.winner, winners: s.winners, noses, center: s.center } : null,
   };
 }

@@ -1,9 +1,8 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { addPlayer, applyAction, newGame } from "../../game/engine";
-import type { GameState, View } from "../../game/types";
-import { viewFor } from "../../game/view";
+import { ackAll, act, game, night, see, toVote, votes } from "../../game/test-helpers";
+import type { View } from "../../game/types";
 import { CLIP_FORMATS, CLIPS, clipFor } from "./clips";
 
 const folder = path.join(process.cwd(), "public/audio/sprache");
@@ -22,60 +21,47 @@ describe("narrator recordings", () => {
 });
 
 describe("clipFor", () => {
-  const ctx = { now: 0, rng: () => 0.5 };
-  const see = (s: GameState) => viewFor(s, "p0", { now: 0, online: new Set() })!;
+  const D = "dorfbewohner" as const;
 
-  function started(): GameState {
-    let s = newGame("TEST", 0);
-    for (let i = 0; i < 4; i++) s = addPlayer(s, { id: `p${i}`, name: `S${i}`, tokenHash: "x" });
-    return applyAction(s, "p0", { type: "start" }, ctx);
-  }
-
-  it("stays silent in the lobby and follows the game from there", () => {
-    const lobby = addPlayer(newGame("TEST", 0), { id: "p0", name: "A", tokenHash: "x" });
-    expect(clipFor(see(lobby))).toBeNull();
-    let s = started();
-    expect(clipFor(see(s))).toBe("rollen");
-    for (const p of s.players) s = applyAction(s, p.id, { type: "ack" }, ctx);
-    expect(clipFor(see(s))).toBe("nachtErste");
-    expect(clipFor({ ...see(s), round: 2 })).toBe("nacht");
+  it("follows the night: nightfall, the Hexe, and silence in between", () => {
+    let s = game(["werwolf", "amor", "hexe", D, D, D]);
+    expect(clipFor(see(s, "p3"))).toBe("nachtErste");
+    s = night(s, "p1", "amor", { targets: ["p3", "p4"] });
+    expect(clipFor(see(s, "p3"))).toBeNull();
+    s = night(s, "p0", "wolf", { targets: ["p5"] });
+    expect(clipFor(see(s, "p3"))).toBe("hexe");
+    s = night(s, "p2", "hexe", {});
+    expect(clipFor(see(s, "p3"))).toBe("morgenOpfer");
+    s = toVote(s);
+    expect(clipFor(see(s, "p3"))).toBe("abstimmung");
+    s = votes(s, { p0: null, p1: null, p2: null, p3: null, p4: null });
+    expect(clipFor(see(s, "p3"))).toBe("urteilNiemand");
+    s = ackAll(s);
+    expect(clipFor(see(s, "p3"))).toBe("nacht");
   });
 
-  it("tells a quiet morning from one with victims, and each kind of ending", () => {
-    const base = see(started());
-    const announce = (kind: "morning" | "verdict" | "hunter", deaths: number): View => ({
-      ...base,
-      phase: "announce",
-      announce: {
-        kind,
-        next: "night",
-        deaths: Array.from({ length: deaths }, () => ({ id: "p1", cause: "wolf" as const })),
-      },
-    });
-    expect(clipFor(announce("morning", 0))).toBe("morgenRuhig");
-    expect(clipFor(announce("morning", 2))).toBe("morgenOpfer");
-    expect(clipFor(announce("verdict", 1))).toBe("urteilVerbannt");
-    expect(clipFor(announce("verdict", 0))).toBe("urteilNiemand");
-    expect(clipFor(announce("hunter", 1))).toBe("jaegerSchuss");
-
-    const vote = (round: 1 | 2): View => ({
-      ...base,
-      phase: "vote",
-      vote: { round, candidates: null, voted: [], myBallot: undefined, previous: null },
-    });
-    expect(clipFor(vote(1))).toBe("abstimmung");
-    expect(clipFor(vote(2))).toBe("stichwahl");
-
-    const ended = (winner: "dorf" | "wolf" | "paar" | "niemand"): View => ({
+  it("knows the endings that have a recording", () => {
+    const base = see(game(["werwolf", D, D, D, D]), "p1");
+    const ended = (winner: NonNullable<View["ended"]>["winner"]): View => ({
       ...base,
       phase: "ended",
-      ended: { winner, noses: [] },
+      ended: { winner, winners: [], noses: [], center: [] },
     });
-    expect((["dorf", "wolf", "paar", "niemand"] as const).map((w) => clipFor(ended(w)))).toEqual([
+    expect(["dorf", "wolf", "paar", "niemand", "engel"].map((w) => clipFor(ended(w as never)))).toEqual([
       "siegDorf",
       "siegWerwoelfe",
       "siegLiebespaar",
       "siegNiemand",
+      null,
     ]);
+  });
+
+  it("plays the Jäger before and after his shot", () => {
+    let s = game(["werwolf", "jaeger", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p1"] });
+    s = ackAll(s);
+    expect(clipFor(see(s, "p2"))).toBe("jaeger");
+    s = act(s, "p1", { type: "choose", targets: ["p2"] });
+    expect(clipFor(see(s, "p3"))).toBe("jaegerSchuss");
   });
 });

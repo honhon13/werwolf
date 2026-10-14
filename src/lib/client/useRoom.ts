@@ -2,18 +2,32 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Action, GameState, View } from "../game/types";
-import { loadCredentials, saveCredentials, store } from "./storage";
+import { loadCredentials, saveCredentials, store, stored } from "./storage";
 
 const POLL_MS = 1500;
 
 export type RoomState =
   | { status: "loading" }
   | { status: "missing" }
-  | { status: "guest"; phase: GameState["phase"]; players: string[] }
+  | {
+      status: "guest";
+      phase: GameState["phase"];
+      players: string[];
+      seats: Seat[];
+      /** The seat this device asked to take over, until the host answers. */
+      waiting: string | null;
+    }
   | { status: "member"; view: View; clockOffset: number };
+
+export interface Seat {
+  id: string;
+  name: string;
+  online: boolean;
+}
 
 interface ServerReply {
   error?: string;
+  seats?: Seat[];
   member?: boolean;
   v?: number;
   online?: string[];
@@ -70,6 +84,13 @@ export async function joinRoom(code: string, name: string): Promise<{ error?: st
   }
 }
 
+const actionId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function useRoom(code: string) {
   const [room, setRoom] = useState<RoomState>({ status: "loading" });
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +106,22 @@ export function useRoom(code: string) {
         return;
       }
       if (status >= 400) return;
+      const waiting = stored(`rejoin:${code}`);
       if (!reply.member) {
-        // Kicked, or the room was recreated: the old seat is gone.
-        if (loadCredentials(code)) saveCredentials(code, null);
+        // Kicked, or the room was recreated: the old seat is gone. A seat
+        // asked for on this device only works once the host agrees.
+        if (loadCredentials(code) && !waiting) saveCredentials(code, null);
         version.current = 0;
-        setRoom({ status: "guest", phase: reply.phase ?? "lobby", players: reply.players ?? [] });
+        setRoom({
+          status: "guest",
+          phase: reply.phase ?? "lobby",
+          players: reply.players ?? [],
+          seats: reply.seats ?? [],
+          waiting,
+        });
         return;
       }
+      if (waiting) store(`rejoin:${code}`, null);
       const v = reply.v ?? 0;
       if (v < version.current) return;
       version.current = v;
@@ -147,8 +177,13 @@ export function useRoom(code: string) {
   const send = useCallback(
     async (action: Action): Promise<boolean> => {
       setBusy(true);
+      const body = { action, id: actionId() };
       try {
-        const [status, reply] = await request(`/api/rooms/${code}/action`, code, { action });
+        // One retry with the same id: the server applies it only once.
+        const [status, reply] = await request(`/api/rooms/${code}/action`, code, body).catch(async () => {
+          await wait(800);
+          return request(`/api/rooms/${code}/action`, code, body);
+        });
         if (status >= 400) {
           setError(reply.error ?? "Das hat nicht geklappt.");
           if (status === 401 || status === 404) refresh.current();
@@ -182,9 +217,44 @@ export function useRoom(code: string) {
     saveCredentials(code, null);
   }, [code]);
 
+  /** Asks the host to hand an existing seat to this device. */
+  const rejoin = useCallback(
+    async (seat: Seat): Promise<boolean> => {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/rooms/${code}/rejoin`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ playerId: seat.id }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? "Das hat nicht geklappt.");
+          return false;
+        }
+        store(`rejoin:${code}`, seat.name);
+        saveCredentials(code, { id: data.id, token: data.token });
+        refresh.current();
+        return true;
+      } catch {
+        setError("Keine Verbindung. Bist du online?");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code],
+  );
+
+  const cancelRejoin = useCallback(() => {
+    store(`rejoin:${code}`, null);
+    saveCredentials(code, null);
+    refresh.current();
+  }, [code]);
+
   const clearError = useCallback(() => setError(null), []);
 
-  return { room, error, clearError, busy, send, join, leave };
+  return { room, error, clearError, busy, send, join, leave, rejoin, cancelRejoin };
 }
 
 export type RoomApi = ReturnType<typeof useRoom>;
