@@ -3,7 +3,7 @@ import type { Mode, RoleId, Settings, Source, Team } from "./types";
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 18;
 /** Time for every decision: a night step, a round of voting, a last choice. */
-export const DECISION_MS = 20_000;
+export const DECISION_MS = 60_000;
 /** A decision sent just before the end may arrive this much later and still counts. */
 export const GRACE_MS = 1_000;
 
