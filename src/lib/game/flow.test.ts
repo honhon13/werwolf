@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, requestRejoin } from "./engine";
+import { addPlayer, applyAction, newGame, requestRejoin } from "./engine";
 import { ackAll, act, alive, ctx, fails, game, night, see, tasks, toVote, votes } from "./test-helpers";
 
 const D = "dorfbewohner" as const;
@@ -164,6 +164,62 @@ describe("robustness", () => {
     s = act(s, "p0", { type: "force" });
     expect(s.announce!.deaths).toEqual([{ id: "p3", cause: "wolf" }]);
     expect(alive(s, "p3")).toBe(false);
+  });
+});
+
+describe("who the game waits for", () => {
+  const waiting = (s: Parameters<typeof see>[0], id = "p0") => see(s, id).progress.waiting;
+
+  it("names who has not looked at their role yet, in seat order", () => {
+    let s = newGame("TEST", 0);
+    for (let i = 0; i < 5; i++) s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: `t${i}` });
+    s = applyAction(s, "p0", { type: "start" }, ctx());
+    expect(waiting(s)).toEqual(["P0", "P1", "P2", "P3", "P4"]);
+    s = act(s, "p3", { type: "ack" });
+    s = act(s, "p0", { type: "ack" });
+    expect(waiting(s)).toEqual(["P1", "P2", "P4"]);
+    expect(see(s, "p4").progress).toMatchObject({ done: 2, total: 5, waiting: ["P1", "P2", "P4"] });
+  });
+
+  it("keeps it secret at night who is still busy", () => {
+    let s = game(["werwolf", "seherin", D, D, D], { decoy: true });
+    expect(waiting(s)).toBeNull();
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    expect(see(s, "p2").progress).toMatchObject({ done: 1, total: 5, waiting: null });
+  });
+
+  it("names who has not confirmed the morning or the discussion", () => {
+    let s = game(["werwolf", "seherin", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = night(s, "p1", "seherin", { targets: ["p0"] });
+    expect(waiting(s)).toEqual(["P0", "P1", "P2", "P3"]);
+    s = ackAll(s);
+    s = act(s, "p1", { type: "ack" });
+    expect(waiting(s, "p4")).toEqual(["P0", "P2", "P3"]);
+  });
+
+  it("names only those who may vote and have not yet", () => {
+    let s = game(["werwolf", "idiot", D, D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p5"] });
+    s = toVote(s);
+    s = votes(s, { p0: "p1", p2: "p1", p3: "p1", p4: "p1" });
+    expect(waiting(s)).toEqual(["P1"]);
+    s = votes(s, { p1: "p0" });
+    s = ackAll(ackAll(s));
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = toVote(s);
+    // The exposed Dorfdepp has no vote, so nobody waits for him.
+    expect(waiting(s)).toEqual(["P0", "P2", "P3"]);
+    s = act(s, "p2", { type: "leave" });
+    expect(waiting(s)).toEqual(["P0", "P3"]);
+  });
+
+  it("names the one who has to choose for everybody", () => {
+    let s = game(["werwolf", "jaeger", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p1"] });
+    s = ackAll(s);
+    expect(s.phase).toBe("hunter");
+    expect(waiting(s, "p2")).toEqual(["P1"]);
   });
 });
 

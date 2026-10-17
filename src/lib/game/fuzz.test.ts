@@ -96,6 +96,13 @@ function nightMove(v: View, task: Task, rng: () => number): Action {
 function checkPrivacy(s: GameState, viewer: string) {
   const me = find(s, viewer)!;
   const v = viewFor(s, viewer, { now: 0, online: new Set() })!;
+  // Who the game waits for: never at night, otherwise exactly the missing players, each once.
+  const { done, total, waiting } = v.progress;
+  if (s.phase === "night") expect(waiting).toBeNull();
+  else if (waiting && total > 1) {
+    expect(waiting).toHaveLength(total - done);
+    expect(new Set(waiting).size).toBe(waiting.length);
+  }
   if (!me.alive || s.phase === "ended" || s.phase === "lobby") return;
   for (const p of v.players) {
     const real = find(s, p.id)!;

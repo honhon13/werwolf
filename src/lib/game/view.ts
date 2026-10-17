@@ -26,29 +26,29 @@ function isDone(s: GameState, p: Player): boolean {
   }
 }
 
+/** How far the players who have to act in this phase are, and who is still missing. */
 function progress(s: GameState): View["progress"] {
+  const of = (need: Player[], done: (p: Player) => boolean) => ({
+    done: need.filter(done).length,
+    total: need.length,
+    waiting: need.filter((p) => !done(p)).map((p) => p.name),
+  });
   switch (s.phase) {
     case "roles":
     case "announce":
-    case "discussion": {
-      const need = ackers(s);
-      return { done: need.filter((p) => s.acks.includes(p.id)).length, total: need.length };
-    }
-    case "night": {
-      const busy = living(s).filter((p) => tasksOf(s, p).length > 0);
-      return { done: busy.filter((p) => playerDone(s, p)).length, total: busy.length };
-    }
+    case "discussion":
+      return of(ackers(s), (p) => s.acks.includes(p.id));
+    case "night":
+      return { ...of(living(s).filter((p) => tasksOf(s, p).length > 0), (p) => playerDone(s, p)), waiting: null };
     case "vote":
-    case "election": {
-      const need = voters(s);
-      return { done: need.filter((p) => p.id in s.vote.ballots).length, total: need.length };
-    }
+    case "election":
+      return of(voters(s), (p) => p.id in s.vote.ballots);
     case "hunter":
     case "succession":
     case "scapegoat":
-      return { done: 0, total: 1 };
+      return { done: 0, total: 1, waiting: s.pending[0] ? [find(s, s.pending[0].who)?.name ?? "?"] : [] };
     default:
-      return { done: 0, total: 0 };
+      return { done: 0, total: 0, waiting: [] };
   }
 }
 

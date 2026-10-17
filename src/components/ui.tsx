@@ -191,8 +191,12 @@ export function PlayerGrid({
   );
 }
 
-export function Progress({ done, total, label }: { done: number; total: number; label?: string }) {
+type ProgressInfo = { done: number; total: number; waiting?: string[] | null };
+
+/** How many are done, and the names of those the phase still waits for. */
+export function Progress({ done, total, waiting, label }: ProgressInfo & { label?: string }) {
   if (total === 0) return null;
+  const missing = [...new Set(waiting ?? [])];
   return (
     <div className="text-center text-sm font-bold text-ink-soft" role="status">
       <div className="mx-auto mb-1.5 h-2 max-w-48 overflow-hidden rounded-full bg-card-strong">
@@ -202,6 +206,17 @@ export function Progress({ done, total, label }: { done: number; total: number; 
         />
       </div>
       {label ?? `${done} von ${total} fertig`}
+      {missing.length > 0 && (
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+          <span>Warten auf:</span>
+          {missing.map((name) => (
+            <span key={name} className="rounded-full border border-line bg-card px-2.5 py-0.5 font-extrabold text-ink">
+              {name}
+            </span>
+          ))}
+        </p>
+      )}
+      {waiting === null && done < total && <p className="mt-1 font-normal">Wer noch fehlt, bleibt nachts geheim.</p>}
     </div>
   );
 }
@@ -247,7 +262,7 @@ export function Sheet({
 }
 
 /** Shown to everyone who has finished their part of a phase. */
-export function Waiting({ children, progress }: { children: ReactNode; progress?: { done: number; total: number } }) {
+export function Waiting({ children, progress }: { children: ReactNode; progress?: ProgressInfo }) {
   return (
     <div className="rise space-y-4 py-4 text-center">
       <p className="text-lg text-balance text-ink-soft">{children}</p>

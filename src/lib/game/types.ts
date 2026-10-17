@@ -360,7 +360,15 @@ export interface View {
     done: boolean;
   };
   players: PublicPlayer[];
-  progress: { done: number; total: number };
+  progress: {
+    done: number;
+    total: number;
+    /**
+     * Names of the players the phase still waits for, in seat order. Null at
+     * night: who is still busy then would give away who has a role.
+     */
+    waiting: string[] | null;
+  };
   setup: {
     auto: boolean;
     counts: Partial<Record<RoleId, number>>;
