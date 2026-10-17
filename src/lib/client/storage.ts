@@ -11,10 +11,6 @@ export interface RoomCredentials {
 }
 
 export function stored(key: string): string | null {
-  return read(key);
-}
-
-function read(key: string): string | null {
   try {
     return window.localStorage.getItem(PREFIX + key);
   } catch {
@@ -45,14 +41,14 @@ function subscribe(onChange: () => void) {
 export function useStored(key: string): string | null {
   return useSyncExternalStore(
     subscribe,
-    () => read(key),
+    () => stored(key),
     () => null,
   );
 }
 
 export function loadCredentials(code: string): RoomCredentials | null {
   try {
-    const parsed = JSON.parse(read(`room:${code}`) ?? "null");
+    const parsed = JSON.parse(stored(`room:${code}`) ?? "null");
     return parsed && typeof parsed.id === "string" && typeof parsed.token === "string"
       ? parsed
       : null;

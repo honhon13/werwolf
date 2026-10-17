@@ -9,7 +9,7 @@ import type { Phase, View } from "@/lib/game/types";
 import { AnnouncePhase, DiscussionPhase, EndedPhase, PendingPhase, VotePhase } from "./phases/Day";
 import { Lobby } from "./phases/Lobby";
 import { NightPhase, RolesPhase } from "./phases/Night";
-import { nameOf, NoteText } from "./phases/shared";
+import { nameOf, names, NoteText } from "./phases/shared";
 import { Rules } from "./Rules";
 import { Button, Card, RoleChips, Sheet } from "./ui";
 
@@ -140,7 +140,7 @@ function MyRole({ view }: { view: View }) {
         {me.exposed && <li>🤪 Du bist als Dorfdepp erkannt und darfst nicht mehr abstimmen.</li>}
         {view.captain === me.id && <li>🎖️ Du bist Hauptmann – deine Stimme zählt doppelt.</li>}
         {view.neighbours && view.neighbours.length > 0 && (
-          <li>🪑 Deine Nachbarn: {view.neighbours.map((id) => nameOf(view, id)).join(" und ")}</li>
+          <li>🪑 Deine Nachbarn: {names(view, view.neighbours)}</li>
         )}
         {view.actorPowers && (
           <li>

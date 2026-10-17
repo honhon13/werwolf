@@ -4,9 +4,7 @@ import { useState } from "react";
 import { ROLES, roleText } from "@/lib/game/roles";
 import type { Task, TaskId, View } from "@/lib/game/types";
 import { Avatar, Button, Card, cx, PlayerGrid, RoleTag, Title, Waiting } from "../ui";
-import { nameOf, NoteText, type PhaseProps, Spectator } from "./shared";
-
-const names = (view: View, ids: string[]) => ids.map((id) => nameOf(view, id)).join(" und ");
+import { nameOf, names, NoteText, type PhaseProps, Spectator } from "./shared";
 
 /** Extra facts a role needs right from the start. */
 function RoleFacts({ view }: { view: View }) {

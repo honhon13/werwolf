@@ -35,7 +35,7 @@ function randomRoles(n: number, rng: () => number): RoleId[] {
 }
 
 /** One random but legal move for this player, or null when there is nothing to do. */
-function move(s: GameState, v: View, rng: () => number): Action | null {
+function move(v: View, rng: () => number): Action | null {
   switch (v.phase) {
     case "roles":
     case "announce":
@@ -140,7 +140,7 @@ function play(n: number, seed: number, manual: boolean) {
     let moved = false;
     for (const p of [...s.players].sort(() => rng() - 0.5)) {
       const v = viewFor(s, p.id, { now: 0, online: new Set() })!;
-      const action = move(s, v, rng);
+      const action = move(v, rng);
       if (!action) continue;
       try {
         s = applyAction(s, p.id, action, ctx);

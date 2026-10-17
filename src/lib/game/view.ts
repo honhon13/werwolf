@@ -1,7 +1,7 @@
 import { voters } from "./day";
 import { ackers, openRejoins } from "./engine";
 import { attacked, enchantable, playerDone, prey, taskDone, tasksOf, wolfConsensus } from "./night";
-import { cards, cardsNeeded, composition, MAX_PLAYERS, MIN_PLAYERS, modeFor, ROLE_ORDER, ROLES } from "./roles";
+import { cards, cardsNeeded, composition, MAX_PLAYERS, modeFor, ROLE_ORDER, ROLES } from "./roles";
 import { find, inPack, living, neighbours, teamOf } from "./state";
 import type { GameState, Player, RoleId, Task, TaskId, View } from "./types";
 
@@ -196,7 +196,6 @@ export function viewFor(
   return {
     code: s.code,
     phase: s.phase,
-    mode: lobby ? modeFor(n) : s.mode,
     short: lobby ? modeFor(n) === "kurz" : s.mode === "kurz",
     round: s.round,
     step: s.phase === "night" ? s.night.step : null,
@@ -205,7 +204,6 @@ export function viewFor(
     deadline: s.deadline,
     me: {
       id: me.id,
-      name: me.name,
       role: me.role,
       team: me.role ? teamOf(s, me) : null,
       alive: me.alive,
@@ -245,7 +243,6 @@ export function viewFor(
       error: comp.error,
       needed: cardsNeeded(n, s.settings.auto ? [] : chosen),
       chosen: chosen.length,
-      min: MIN_PLAYERS,
       max: MAX_PLAYERS,
     },
     inPlay,
@@ -254,7 +251,6 @@ export function viewFor(
     notes: s.notes[me.id] ?? [],
     potions: me.role === "hexe" ? s.potions : null,
     actorPowers: me.role === "schauspieler" ? s.actorPowers : null,
-    wildModel: me.role === "wildesKind" ? s.wildModel : null,
     neighbours: showsNeighbours && !lobby ? neighbours(s, me.id).map((p) => p.id) : null,
     announce: s.phase === "announce" ? s.announce : null,
     pending: deciding ? (s.pending[0] ?? null) : null,
@@ -268,7 +264,6 @@ export function viewFor(
           voted: Object.keys(s.vote.ballots),
           myBallot: s.vote.ballots[me.id],
           previous: s.vote.previous,
-          voters: voters(s).map((p) => p.id),
           marked: s.vote.kind === "lynch" && s.vote.round === 1 ? s.marks : [],
         }
       : null,

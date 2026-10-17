@@ -1,4 +1,4 @@
-import { find, hasPower, inPack, log, nameOf, nextWolfAfter, note, roleName } from "./state";
+import { find, hasPower, inPack, log, nextWolfAfter, note, roleName } from "./state";
 import type { Death, DeathCause, GameState } from "./types";
 
 const CAUSE: Record<DeathCause, string> = {
@@ -54,9 +54,3 @@ export function kill(s: GameState, id: string, cause: DeathCause, deaths: Death[
     kill(s, other, "liebe", deaths);
   }
 }
-
-export function causeText(cause: DeathCause) {
-  return CAUSE[cause];
-}
-
-export { nameOf };

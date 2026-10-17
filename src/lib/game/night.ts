@@ -20,9 +20,6 @@ import type { Action, Announce, Death, GameState, NightState, NightStep, Player,
 /** The order of the night. Steps in which nobody has anything to do are skipped. */
 export const STEPS: NightStep[] = ["dieb", "erwachen", "haupt", "rudel", "hexe"];
 
-/** Tasks that only exist so that everybody taps something. */
-const DECOYS: TaskId[] = ["suspect", "sleep", "lurk"];
-
 export function freshNight(): NightState {
   return {
     step: null,
@@ -446,8 +443,6 @@ export function resolveNight(s: GameState): Announce {
     powersLost: s.powersLost && !powersBefore,
   };
 }
-
-export { DECOYS };
 
 /** Starts a step of the night. */
 export function advanceTo(s: GameState, step: NightStep) {

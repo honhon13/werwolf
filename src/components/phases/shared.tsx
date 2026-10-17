@@ -14,7 +14,7 @@ export interface PhaseProps {
 export const nameOf = (view: View, id: string | null | undefined) =>
   view.players.find((p) => p.id === id)?.name ?? "jemand";
 
-const names = (view: View, ids: string[]) => {
+export const names = (view: View, ids: string[]) => {
   const list = ids.map((id) => nameOf(view, id));
   return list.length > 1 ? `${list.slice(0, -1).join(", ")} und ${list.at(-1)}` : (list[0] ?? "niemand");
 };

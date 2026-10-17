@@ -30,7 +30,6 @@ import { STATE_REV } from "./types";
 import { checkWinner, winnersOf } from "./win";
 
 export { GameError } from "./state";
-export type { Ctx } from "./state";
 
 const NAME_MAX = 14;
 /** Rejoin requests older than this are dropped. */

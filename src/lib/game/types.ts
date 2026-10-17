@@ -128,8 +128,6 @@ export interface Announce {
   powersLost?: boolean;
   /** Players the Sündenbock allowed to vote tomorrow. */
   voters?: string[];
-  /** The Urwolf infected somebody tonight (who stays secret). */
-  infected?: boolean;
 }
 
 /** Something a player has to do before the game can move on. */
@@ -332,7 +330,6 @@ export interface PublicPlayer {
 export interface View {
   code: string;
   phase: Phase;
-  mode: Mode;
   /** In the lobby: whether starting now would give a short round. */
   short: boolean;
   round: number;
@@ -343,7 +340,6 @@ export interface View {
   deadline: number | null;
   me: {
     id: string;
-    name: string;
     role: RoleId | null;
     team: Team | null;
     alive: boolean;
@@ -369,7 +365,6 @@ export interface View {
     /** Cards needed: the number of players, plus two with the Dieb. */
     needed: number;
     chosen: number;
-    min: number;
     max: number;
   };
   /** Roles in this game (known to everybody, like the open card set). */
@@ -379,7 +374,6 @@ export interface View {
   notes: Note[];
   potions: { heal: boolean; poison: boolean } | null;
   actorPowers: RoleId[] | null;
-  wildModel: string | null;
   neighbours: string[] | null;
   announce: Announce | null;
   pending: Pending | null;
@@ -392,7 +386,6 @@ export interface View {
     voted: string[];
     myBallot: string | null | undefined;
     previous: Record<string, string | null> | null;
-    voters: string[];
     marked: string[];
   } | null;
   rejoins: { id: string; name: string }[];

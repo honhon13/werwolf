@@ -4,8 +4,6 @@ export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 18;
 /** Fewer players than this get a fixed variant instead of free role choice. */
 export const FREE_CHOICE_FROM = 5;
-/** Kept for the screens that ask about the short round. */
-export const SHORT_ROUND_PLAYERS = 3;
 
 export type Category = "grund" | "info" | "sonder" | "erweiterung";
 
