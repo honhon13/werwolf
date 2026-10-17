@@ -120,11 +120,20 @@ export function wolfConsensus(s: GameState): string | null {
   return wolves.every((w) => s.night.wolfVotes[w.id] === first) ? first : null;
 }
 
-/** Players attacked tonight, as the Hexe sees them. */
+/** Players attacked tonight, as the Hexe sees them. Somebody who left is not among them. */
 export function attacked(s: GameState): string[] {
   const n = s.night;
   const ids = [n.infect ? null : n.victim, n.bigWolfVictim, n.whiteWolfVictim];
-  return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  return [...new Set(ids.filter((id): id is string => Boolean(id) && find(s, id)?.alive === true))];
+}
+
+/** Once all living wolves agree, their victim stands and their task is done. */
+export function settleWolves(s: GameState) {
+  const victim = wolfConsensus(s);
+  if (!victim || s.night.victim) return;
+  s.night.victim = victim;
+  for (const w of pack(s)) finish(s, w, "wolf");
+  log(s, `Die Wölfe wählten ${nameOf(s, victim)}.`, true);
 }
 
 function finish(s: GameState, p: Player, task: TaskId) {
@@ -202,12 +211,7 @@ export function nightAction(s: GameState, me: Player, action: NightAction) {
       const target = one();
       if (inPack(target)) throw new GameError("Wölfe greifen keine Wölfe an.");
       n.wolfVotes[me.id] = target.id;
-      const victim = wolfConsensus(s);
-      if (victim) {
-        n.victim = victim;
-        for (const w of pack(s)) finish(s, w, "wolf");
-        log(s, `Die Wölfe wählten ${nameOf(s, victim)}.`, true);
-      }
+      settleWolves(s);
       return;
     }
 

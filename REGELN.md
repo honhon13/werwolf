@@ -27,22 +27,25 @@ Ergebnis aus. Jede Regel unten ist durch Tests abgedeckt (`pnpm test`).
 | Spieler | Variante | Rollen |
 | --- | --- | --- |
 | unter 3 | kein Start möglich | – |
-| 3 | **Kurzrunde** (Hausregel) | Werwolf, Seherin, Dorfbewohner – fest |
-| 4 | **Viererrunde** (Hausregel) | Werwolf, Seherin, Beschützer, Dorfbewohner – fest |
+| 3 | **Kurzrunde** (Hausregel) | Vorschlag: Werwolf, Seherin, Dorfbewohner – oder frei gewählt |
+| 4 | **Viererrunde** (Hausregel) | Vorschlag: Werwolf, Seherin, Beschützer, Dorfbewohner – oder frei gewählt |
 | 5–18 | volles Spiel | automatisch oder frei gewählt |
 | über 18 | kein Beitritt möglich | – |
 
 **Kurzrunde (3 Spieler):** In der einzigen Nacht greift der Werwolf
-niemanden an; die Seherin sieht eine Rolle und weiß danach, wer der Werwolf
-ist. Am Tag gibt es genau eine Abstimmung (bei Gleichstand eine Stichwahl).
-Wird der Werwolf verbannt, gewinnt das Dorf, sonst der Werwolf. Im
-Tarnmodus bekommt der Werwolf nachts nur eine Tarnaufgabe.
+niemanden an; mit der vorgeschlagenen Besetzung sieht die Seherin eine Rolle
+und weiß danach, wer der Werwolf ist. Am Tag gibt es genau eine Abstimmung
+(bei Gleichstand eine Stichwahl). Wird der Werwolf verbannt, gewinnt das
+Dorf, sonst der Werwolf. Im Tarnmodus bekommt der Werwolf nachts nur eine
+Tarnaufgabe.
 
-**Viererrunde (4 Spieler):** normale Regeln mit den vier festen Rollen.
-Ohne Hauptmann.
+**Viererrunde (4 Spieler):** normale Regeln, ohne Hauptmann.
 
-Bei 3 und 4 Spielern lässt sich keine andere Rollenwahl einstellen; die
-Lobby zeigt die feste Besetzung an.
+Auch bei 3 und 4 Spielern kann die Spielleitung die Rollen selbst wählen.
+Es gelten dieselben Prüfungen wie sonst (siehe 2); Flötenspieler und
+Wolfshund gehen erst ab 5 Spielern (Hausregel), weil der Flötenspieler sonst
+fast sofort gewinnt und ein Wolfshund auf der Seite der Wölfe das Rudel schon
+in der ersten Nacht gleichziehen lässt.
 
 ## 2. Rollen verteilen
 
@@ -75,12 +78,16 @@ nur, wenn
 - die Summe der Karten der Spielerzahl entspricht (mit Dieb **zwei mehr**),
 - jede Sonderrolle höchstens einmal vorkommt (nur Werwolf und Dorfbewohner
   dürfen mehrfach gewählt werden),
-- mindestens ein Werwolf, Urwolf oder Großer böser Wolf dabei ist,
+- mindestens ein **Werwolf** dabei ist (Urwolf, Großer böser Wolf und
+  Weißer Werwolf kommen nur zusätzlich dazu),
 - die jagenden Wölfe (Werwolf, Urwolf, Großer böser Wolf, Weißer Werwolf)
   zu Beginn **weniger als die Hälfte** der Spieler sind,
-- mindestens eine Rolle zum Dorf gehört.
+- mindestens eine Rolle zum Dorf gehört,
+- bei weniger als 5 Spielern weder Flötenspieler noch Wolfshund gewählt sind.
 
-Sonst nennt die Lobby den Grund, und der Start-Knopf bleibt gesperrt.
+Sonst nennt die Lobby den Grund, und der Start-Knopf bleibt gesperrt. Der
+Server prüft das beim Start noch einmal. Wer auf „Selbst wählen“ wechselt,
+beginnt mit dem automatischen Vorschlag.
 
 ### Austeilen
 
@@ -88,7 +95,10 @@ Die Karten werden auf dem Server gemischt und zufällig verteilt. Die
 Spielleitung sieht nur die Besetzung, nicht wer welche Karte hat. Mit Dieb
 bleiben zwei Karten in der Mitte; es wird so lange gemischt, bis mindestens
 ein jagender Wolf (nicht der Weiße Werwolf) bei einem Spieler liegt
-(Hausregel).
+(Hausregel). Jede Karte geht an genau einen Spieler.
+
+Startet im selben Raum eine neue Runde, wird alles zurückgesetzt und neu
+gemischt; aus der letzten Runde bleibt nur die Einstellung der Spielleitung.
 
 Die **Sitzreihenfolge** ist die Reihenfolge in der Lobby. Sie zählt für
 Fuchs, Bärenführer und Ritter (Digitalregel).
@@ -274,7 +284,29 @@ Rudel.
 | Kräuterhexe | in keiner Ausgabe mit festen Regeln enthalten |
 | Brandstifter | braucht den Spielplan der Erweiterung „Die Gemeinde“ |
 
-## 9. Damit das Spiel nicht hängen bleibt
+## 9. Spiel verlassen (Digitalregel)
+
+Jeder kann jederzeit über das Menü gehen.
+
+- **In der Lobby:** Man steht nicht mehr auf der Liste. Ging die
+  Spielleitung, übernimmt der Nächste in der Liste.
+- **Im laufenden Spiel:** Man scheidet sofort aus, und alle sehen die Rolle.
+  Das Verlassen löst nichts aus: kein Schuss des Jägers, kein Liebeskummer
+  (die Liebe zerbricht, der andere spielt allein weiter), kein Sieg des
+  Engels, kein Fluch des Ältesten, keine Verwandlung des Wilden Kindes. War
+  man Hauptmann, geht das Amt per Los an einen Lebenden. Ging die
+  Spielleitung, übernimmt der nächste Spieler, der noch dabei ist.
+- Stimmen von und für den Gegangenen zählen nicht mehr; wer für ihn
+  gestimmt hatte, stimmt neu ab. Hatte das Rudel ihn als Opfer gewählt und
+  ist die Nacht noch nicht weiter, wählen die Wölfe neu.
+- Wartete das Spiel nur noch auf den Gegangenen, geht es sofort weiter.
+  Danach wird geprüft, ob schon jemand gewonnen hat.
+- Wer gegangen ist, gewinnt nicht mit und kann in dieser Runde nicht zurück.
+  Bei der nächsten Runde im selben Raum ist er nicht mehr auf der Liste und
+  kann neu beitreten.
+- **Nach Spielende:** Man bleibt in der Übersicht und behält einen Sieg.
+
+## 10. Damit das Spiel nicht hängen bleibt
 
 - **Überspringen** (nur Spielleitung, Digitalregel): beendet die aktuelle
   Phase mit dem, was eingegeben wurde. Fehlende Stimmen zählen als
@@ -287,10 +319,15 @@ Rudel.
   ausgeführt.
 - **Gerät gewechselt:** Auf dem neuen Gerät den eigenen Namen wählen; die
   Spielleitung bestätigt. Das alte Gerät verliert damit den Zugang.
+- **Ein Platz pro Gerät:** Jedes Gerät hat einen geheimen Schlüssel. Tritt
+  dasselbe Gerät noch einmal bei – auch mit mehreren Anfragen gleichzeitig
+  oder nach dem Neuladen –, bekommt es seinen Platz zurück statt eines
+  zweiten. Ein Gerät, das schon einen Platz hat, kann keinen weiteren
+  übernehmen. Namen gibt es pro Raum nur einmal.
 - **Spielleitung weg:** Ist sie 45 Sekunden nicht erreichbar, übernimmt der
   nächste verbundene Spieler.
 
-## 10. Was jeder sieht
+## 11. Was jeder sieht
 
 - Die eigene Rolle und eigene Nachtergebnisse sieht nur man selbst.
 - Wölfe sehen ihr Rudel (der Weiße Werwolf gilt dabei als normaler Wolf),

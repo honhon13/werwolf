@@ -8,9 +8,10 @@ mit dem vierstelligen Code oder per QR-Code bei – ohne Konto.
 
 24 Rollen aus dem Grundspiel und den Erweiterungen Neumond und Charaktere,
 dazu der Hauptmann. 3 bis 18 Spieler: Zu dritt gibt es eine Kurzrunde, zu
-viert eine feste Viererrunde, ab 5 Spielern verteilt die App eine ausgewogene
-Besetzung oder die Spielleitung stellt die Rollen selbst zusammen – ohne zu
-erfahren, wer welche Karte bekommt.
+viert eine Viererrunde. Die App schlägt eine ausgewogene Besetzung vor, oder
+die Spielleitung stellt die Rollen selbst zusammen – ohne zu erfahren, wer
+welche Karte bekommt. Jeder kann Lobby und Spiel jederzeit verlassen; jedes
+Gerät hat pro Raum höchstens einen Platz.
 
 Welche Regeln genau gelten, auch dort, wo die gedruckten Regeln offen sind,
 steht verbindlich in [REGELN.md](REGELN.md).

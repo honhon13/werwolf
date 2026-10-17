@@ -29,7 +29,7 @@ export function game(
 ): GameState {
   let s = newGame("TEST", 0);
   roles.forEach((_, i) => {
-    s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: "x" });
+    s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: `t${i}` });
   });
   s.settings.captain = opts.captain ?? false;
   s.settings.decoy = opts.decoy ?? false;

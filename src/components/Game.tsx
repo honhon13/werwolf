@@ -348,7 +348,18 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
                 </p>
               </>
             )}
-            {!playing && <ConfirmButton label="🚪 Raum verlassen" onConfirm={leave} />}
+            {playing && view.phase !== "ended" ? (
+              <>
+                <ConfirmButton label="🚪 Spiel verlassen" onConfirm={leave} />
+                <p className="px-1 text-sm text-ink-soft">
+                  {view.me.alive
+                    ? "Wer geht, scheidet aus, und alle sehen seine Rolle. Mitspielen kannst du erst in der nächsten Runde wieder."
+                    : "Du schaust dann nicht mehr zu. In der nächsten Runde kannst du wieder mitspielen."}
+                </p>
+              </>
+            ) : (
+              <ConfirmButton label="🚪 Raum verlassen" onConfirm={leave} />
+            )}
           </div>
         </Sheet>
       )}

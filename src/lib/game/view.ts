@@ -228,6 +228,7 @@ export function viewFor(
       lover: lover(p) && seesLovers,
       captain: s.captain === p.id,
       exposed: p.exposed,
+      left: p.left === true,
       // Who is finished at night would expose who has a role.
       done: s.phase !== "night" && isDone(s, p),
     })),

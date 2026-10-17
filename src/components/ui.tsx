@@ -142,7 +142,7 @@ export function PlayerGrid({
         const notes = [
           p.id === meId && "du",
           showReady && p.ready && "✓ bereit",
-          showOffline && !p.online && "offline",
+          p.left ? "🚪 gegangen" : showOffline && !p.online && "offline",
         ].filter(Boolean);
         const marks = markers(p, secrets);
         const body = (

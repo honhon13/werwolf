@@ -14,8 +14,9 @@ const RULES = [
   "Das Rudel gewinnt, sobald es mindestens so viele Wölfe gibt wie alle anderen zusammen. Das Dorf gewinnt, wenn kein Wolf, kein Weißer Werwolf und kein Flötenspieler mehr lebt.",
   "Sind die Verliebten aus verschiedenen Teams, gewinnen sie nur gemeinsam als die letzten beiden.",
   "Die Sitzreihenfolge ist die Reihenfolge in der Lobby – wichtig für Fuchs, Bärenführer und Ritter.",
-  "Zu dritt spielt ihr eine Kurzrunde: Nachts scheidet niemand aus, die Seherin findet den Werwolf, und eine einzige Abstimmung entscheidet.",
-  "Zu viert spielt ihr mit Werwolf, Seherin, Beschützer und Dorfbewohner.",
+  "Zu dritt spielt ihr eine Kurzrunde: Nachts erwischen die Wölfe niemanden, und eine einzige Abstimmung entscheidet.",
+  "Zu viert gelten die normalen Regeln, nur ohne Hauptmann. Auch bei 3 und 4 Spielern könnt ihr die Rollen selbst wählen – ein Werwolf ist immer dabei.",
+  "Wer das Spiel verlässt, scheidet aus und zeigt seine Rolle. Ausgelöst wird dadurch nichts: kein Jäger-Schuss, kein Liebeskummer.",
   "Hängt das Spiel, kann die Spielleitung im Menü eine Phase überspringen.",
 ];
 

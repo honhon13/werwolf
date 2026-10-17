@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addPlayer, applyAction, newGame, normalize } from "./engine";
-import { autoRoles, cards, composition, deal, MAX_PLAYERS, problem, ROLES } from "./roles";
+import { autoRoles, cards, composition, countsOf, deal, MAX_PLAYERS, problem, ROLES } from "./roles";
 import { ctx, fails, seeded, see } from "./test-helpers";
 import type { GameState, RoleId, Settings } from "./types";
 
@@ -15,7 +15,7 @@ const settings = (patch: Partial<Settings> = {}): Settings => ({
 
 function lobby(n: number): GameState {
   let s = newGame("TEST", 0);
-  for (let i = 0; i < n; i++) s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: "x" });
+  for (let i = 0; i < n; i++) s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: `t${i}` });
   return s;
 }
 
@@ -32,10 +32,12 @@ describe("automatic roles", () => {
     }
   });
 
-  it("use the fixed variants for three and four players, whatever the settings", () => {
-    const manual = settings({ auto: false, counts: { werwolf: 2, hexe: 1, amor: 1 } });
-    expect(composition(3, manual).roles).toEqual(["werwolf", "seherin", "dorfbewohner"]);
-    expect(composition(4, manual).roles).toEqual(["werwolf", "seherin", "beschuetzer", "dorfbewohner"]);
+  it("suggest a set for three and four players, which the host may replace", () => {
+    expect(composition(3, settings()).roles).toEqual(["werwolf", "seherin", "dorfbewohner"]);
+    expect(composition(4, settings()).roles).toEqual(["werwolf", "seherin", "beschuetzer", "dorfbewohner"]);
+    const own = settings({ auto: false, counts: { werwolf: 1, hexe: 1, amor: 1 } });
+    expect(composition(3, own)).toEqual({ roles: ["werwolf", "amor", "hexe"], error: null });
+    expect(composition(4, own).error).toMatch(/3 Karten, gebraucht werden 4/);
     expect(composition(2, settings()).error).toMatch(/mindestens 3/);
     expect(composition(19, settings()).error).toMatch(/höchstens 18/);
   });
@@ -52,10 +54,24 @@ describe("manual roles", () => {
     expect(check(6, { werwolf: 1, dieb: 1, dorfbewohner: 6 })).toBeNull();
   });
 
-  it("allows unique roles only once and needs a hunting wolf", () => {
+  it("allows unique roles only once and always needs a Werwolf", () => {
     expect(check(6, { werwolf: 1, seherin: 2, dorfbewohner: 3 })).toMatch(/Seherin darf nur einmal/);
     expect(check(6, { weisserWolf: 1, dorfbewohner: 5 })).toMatch(/mindestens einen Werwolf/);
-    expect(check(6, { urwolf: 1, dorfbewohner: 5 })).toBeNull();
+    expect(check(6, { urwolf: 1, dorfbewohner: 5 })).toMatch(/mindestens einen Werwolf/);
+    expect(check(6, { werwolf: 1, urwolf: 1, dorfbewohner: 4 })).toBeNull();
+    expect(check(9, { werwolf: 3, dorfbewohner: 6 })).toBeNull();
+  });
+
+  it("checks three and four players like any game, and keeps out roles that need more", () => {
+    expect(check(3, { werwolf: 1, dorfbewohner: 2 })).toBeNull();
+    expect(check(3, { werwolf: 1, dieb: 1, dorfbewohner: 3 })).toBeNull();
+    expect(check(4, { werwolf: 1, jaeger: 1, amor: 1, dorfbewohner: 1 })).toBeNull();
+    expect(check(3, { seherin: 1, dorfbewohner: 2 })).toMatch(/mindestens einen Werwolf/);
+    expect(check(3, { werwolf: 2, dorfbewohner: 1 })).toMatch(/Zu viele Wölfe/);
+    expect(check(4, { werwolf: 2, dorfbewohner: 2 })).toMatch(/Zu viele Wölfe/);
+    expect(check(4, { werwolf: 1, floetenspieler: 1, dorfbewohner: 2 })).toMatch(/Der Flötenspieler braucht mindestens 5/);
+    expect(check(3, { werwolf: 1, wolfshund: 1, dorfbewohner: 1 })).toMatch(/Der Wolfshund braucht mindestens 5/);
+    expect(check(5, { werwolf: 1, floetenspieler: 1, wolfshund: 1, dorfbewohner: 2 })).toBeNull();
   });
 
   it("refuses a set where the wolves would win from the start", () => {
@@ -73,6 +89,24 @@ describe("manual roles", () => {
     s = applyAction(s, "p0", { type: "settings", settings: { counts } }, ctx());
     expect(see(s, "p0").setup).toMatchObject({ chosen: 8, needed: 9 });
     fails(() => applyAction(s, "p1", { type: "settings", settings: { captain: true } }, ctx()), /Spielleitung/);
+  });
+
+  it("starts from the suggestion with three players and deals the host's own choice", () => {
+    let s = lobby(3);
+    s = applyAction(s, "p0", { type: "settings", settings: { auto: false } }, ctx());
+    expect(s.settings.counts).toEqual({ werwolf: 1, seherin: 1, dorfbewohner: 1 });
+    const counts = { werwolf: 1, hexe: 1, dorfbewohner: 1 };
+    s = applyAction(s, "p0", { type: "settings", settings: { counts } }, ctx());
+    s = applyAction(s, "p0", { type: "start" }, ctx(seeded(4)));
+    expect(s.mode).toBe("kurz");
+    expect(s.players.map((p) => p.role).sort()).toEqual(["dorfbewohner", "hexe", "werwolf"]);
+  });
+
+  it("refuses to start an unplayable choice and says why", () => {
+    let s = lobby(4);
+    s = applyAction(s, "p0", { type: "settings", settings: { auto: false, counts: { seherin: 1, dorfbewohner: 3 } } }, ctx());
+    expect(see(s, "p0").setup).toMatchObject({ roles: null, error: "Es braucht mindestens einen Werwolf." });
+    fails(() => applyAction(s, "p0", { type: "start" }, ctx()), /mindestens einen Werwolf/);
   });
 });
 
@@ -99,12 +133,41 @@ describe("dealing", () => {
     expect(host.history.every((h) => !h.text.includes(" ist "))).toBe(true);
   });
 
+  it("hands out exactly the chosen cards, one to each player, in a new order every time", () => {
+    const counts = { werwolf: 2, seherin: 1, hexe: 1, jaeger: 1, dorfbewohner: 2 };
+    const orders = new Set<string>();
+    for (let seed = 1; seed <= 20; seed++) {
+      let s = applyAction(lobby(7), "p0", { type: "settings", settings: { auto: false, counts } }, ctx());
+      s = applyAction(s, "p0", { type: "start" }, ctx(seeded(seed)));
+      const hands = s.players.map((p) => p.role!);
+      expect(countsOf(hands)).toEqual(counts);
+      orders.add(hands.join());
+    }
+    expect(orders.size).toBeGreaterThan(10);
+  });
+
+  it("deals again from scratch when a new round starts in the same room", () => {
+    let s = applyAction(lobby(6), "p0", { type: "start" }, ctx(seeded(1)));
+    const first = s.players.map((p) => p.role).join();
+    s = applyAction(s, "p0", { type: "abort" }, ctx());
+    expect(s.phase).toBe("lobby");
+    expect(s.players.every((p) => p.role === null && p.alive && !p.turned && !p.enchanted && !p.exposed)).toBe(true);
+    expect(s).toMatchObject({ round: 0, center: [], lovers: null, captain: null, notes: {}, history: [], winner: null });
+    const rounds = new Set([first]);
+    for (let seed = 2; seed <= 6; seed++) {
+      const next = applyAction(s, "p0", { type: "start" }, ctx(seeded(seed)));
+      expect(countsOf(next.players.map((p) => p.role!))).toEqual(countsOf(autoRoles(6)));
+      rounds.add(next.players.map((p) => p.role).join());
+    }
+    expect(rounds.size).toBeGreaterThan(1);
+  });
+
   it("lets 3 to 18 players start and nobody more join", () => {
     for (const n of [3, 4, 5, 12, 18]) {
       const s = applyAction(lobby(n), "p0", { type: "start" }, ctx(seeded(n)));
       expect(s.mode).toBe(n === 3 ? "kurz" : n === 4 ? "vier" : "normal");
     }
-    fails(() => addPlayer(lobby(18), { id: "x", name: "Neunzehn", tokenHash: "x" }), /voll/);
+    fails(() => addPlayer(lobby(18), { id: "x", name: "Neunzehn", tokenHash: "t19" }), /voll/);
     fails(() => applyAction(lobby(2), "p0", { type: "start" }, ctx()), /mindestens 3/);
   });
 });

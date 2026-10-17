@@ -28,8 +28,12 @@ export function checkWinner(s: GameState): Winner | null {
   return null;
 }
 
-/** Everybody who shares the win, alive or not. */
+/** Everybody who shares the win, alive or not, but not who left the game. */
 export function winnersOf(s: GameState, winner: Winner): string[] {
+  return teamWinners(s, winner).filter((id) => !find(s, id)?.left);
+}
+
+function teamWinners(s: GameState, winner: Winner): string[] {
   const mixedLovers: string[] =
     s.lovers && teamOf(s, find(s, s.lovers[0])!) !== teamOf(s, find(s, s.lovers[1])!) ? s.lovers : [];
   switch (winner) {

@@ -16,7 +16,7 @@ const sample = <T>(items: T[], k: number, rng: () => number) => {
 
 const SPECIALS = ROLE_ORDER.filter((r) => ROLES[r].max === 1 && !ROLES[r].hunts);
 
-/** A random set of cards the manual mode accepts, for 5 or more players. */
+/** A random set of cards the manual mode accepts. */
 function randomRoles(n: number, rng: () => number): RoleId[] {
   for (;;) {
     const wolves = 1 + Math.floor(rng() * Math.max(1, Math.floor((n - 1) / 2)));
@@ -112,10 +112,13 @@ function checkPrivacy(s: GameState, viewer: string) {
   }
 }
 
-function play(n: number, seed: number, manual: boolean) {
+/** How often the host had to skip a step, across the games played so far. */
+let forced = 0;
+
+function play(n: number, seed: number, manual: boolean, leaveChance = 0) {
   const rng = seeded(seed);
   let s = newGame("FUZZ", 0);
-  for (let i = 0; i < n; i++) s = addPlayer(s, { id: `p${i}`, name: `S${i}`, tokenHash: "x" });
+  for (let i = 0; i < n; i++) s = addPlayer(s, { id: `p${i}`, name: `S${i}`, tokenHash: `t${i}` });
   const ctx = { now: 0, rng };
   s = applyAction(
     s,
@@ -126,7 +129,7 @@ function play(n: number, seed: number, manual: boolean) {
         auto: !manual,
         captain: rng() < 0.5,
         decoy: rng() < 0.5,
-        counts: manual && n >= 5 ? countsOf(randomRoles(n, rng)) : {},
+        counts: manual ? countsOf(randomRoles(n, rng)) : {},
       },
     },
     ctx,
@@ -150,9 +153,15 @@ function play(n: number, seed: number, manual: boolean) {
         if (!(e instanceof GameError)) throw e;
       }
     }
+    if (leaveChance > 0 && s.phase !== "ended" && rng() < leaveChance) {
+      // Somebody walks off, at any moment, the host included.
+      s = applyAction(s, pick(s.players.filter((p) => !p.left), rng).id, { type: "leave" }, ctx);
+      moved = true;
+    }
     if (!moved) {
       // Only a step the random players cannot finish is left: the host moves it on.
       if (++stuck > 50) throw new Error(`no move n=${n} seed=${seed} in ${s.phase}/${s.night.step}`);
+      forced++;
       s = applyAction(s, s.hostId, { type: "force" }, ctx);
     }
     for (const p of s.players) checkPrivacy(s, p.id);
@@ -179,6 +188,24 @@ describe("random games", () => {
     expect([...winners.keys()]).toEqual(expect.arrayContaining(["dorf", "wolf"]));
     // Every role took part in at least one game.
     expect(ROLE_ORDER.filter((r) => !used.has(r))).toEqual([]);
+  });
+
+  it("go on without a hitch when players leave at any moment", { timeout: 240_000 }, () => {
+    forced = 0;
+    let leavers = 0;
+    for (let n = 3; n <= MAX_PLAYERS; n++) {
+      for (let seed = 0; seed < 8; seed++) {
+        const s = play(n, n * 1000 + seed, seed % 2 === 1, 0.03);
+        const gone = s.players.filter((p) => p.left);
+        leavers += gone.length;
+        expect(s.winners.some((id) => gone.some((p) => p.id === id))).toBe(false);
+        expect(gone.every((p) => p.tokenHash === "")).toBe(true);
+        expect(s.players.some((p) => p.id === s.hostId && !p.left) || gone.length === n).toBe(true);
+      }
+    }
+    expect(leavers).toBeGreaterThan(100);
+    // Nobody ever has to wait for somebody who left.
+    expect(forced).toBe(0);
   });
 
   it("uses only the automatic sets the balance table defines", () => {

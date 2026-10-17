@@ -144,8 +144,8 @@ function Switch({
 }
 
 const SMALL_TEXT = {
-  kurz: "Kurzrunde zu dritt: In der Nacht scheidet niemand aus. Die Seherin findet den Werwolf – und am Tag habt ihr genau eine Abstimmung, um ihn zu verbannen.",
-  vier: "Runde zu viert: Werwolf, Seherin, Beschützer und Dorfbewohner. In der ersten Nacht scheidet höchstens einer aus – es kommt also immer zu einer Abstimmung.",
+  kurz: "Kurzrunde zu dritt: In der Nacht erwischen die Wölfe niemanden – und am Tag habt ihr genau eine Abstimmung, um den Werwolf zu verbannen.",
+  vier: "Runde zu viert: Es gelten die normalen Regeln, nur ohne Hauptmann.",
 };
 
 /** Lets the host pick how often each role is in the game. */
@@ -216,7 +216,8 @@ function RoleEditor({ view, change }: { view: View; change: (c: Change) => void 
                       <button
                         type="button"
                         aria-label={`Ein ${r.name} weniger`}
-                        disabled={n <= 0}
+                        // One Werwolf is always in the game.
+                        disabled={n <= (role === "werwolf" ? 1 : 0)}
                         onClick={() => set(role, n - 1)}
                         className="size-11 rounded-full border border-line text-2xl font-extrabold disabled:opacity-30"
                       >
@@ -329,19 +330,17 @@ export function Lobby({ view, api }: PhaseProps) {
 
         {me.host && (
           <div className="space-y-3 border-t border-line pt-3">
+            <Segmented
+              value={setup.auto}
+              options={[
+                { value: true, label: "Automatisch" },
+                { value: false, label: "Selbst wählen" },
+              ]}
+              onChange={(auto) => change({ auto })}
+            />
+            {!setup.auto && <RoleEditor view={view} change={change} />}
             {!small && (
-              <>
-                <Segmented
-                  value={setup.auto}
-                  options={[
-                    { value: true, label: "Automatisch" },
-                    { value: false, label: "Selbst wählen" },
-                  ]}
-                  onChange={(auto) => change({ auto })}
-                />
-                {!setup.auto && <RoleEditor view={view} change={change} />}
-                <Switch on={setup.captain} label="🎖️ Hauptmann wählen" hint={CAPTAIN_TEXT} onChange={(captain) => change({ captain })} />
-              </>
+              <Switch on={setup.captain} label="🎖️ Hauptmann wählen" hint={CAPTAIN_TEXT} onChange={(captain) => change({ captain })} />
             )}
             <Switch
               on={setup.decoy}

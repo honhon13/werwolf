@@ -7,6 +7,7 @@ import {
   freshNight,
   nightAction,
   resolveNight,
+  settleWolves,
   stepComplete,
   STEPS,
   stepHasWork,
@@ -17,14 +18,14 @@ import {
   composition,
   countsOf,
   deal,
-  FREE_CHOICE_FROM,
   MAX_PLAYERS,
+  MIN_PLAYERS,
   modeFor,
   ROLE_ORDER,
   ROLES,
   shuffle,
 } from "./roles";
-import { type Ctx, find, GameError, living, log, nameOf } from "./state";
+import { type Ctx, find, GameError, living, log, nameOf, roleName } from "./state";
 import type { Action, Announce, Death, GameState, Player, RoleId, Settings, Winner } from "./types";
 import { STATE_REV } from "./types";
 import { checkWinner, winnersOf } from "./win";
@@ -140,6 +141,7 @@ export function addPlayer(
   if (s.phase !== "lobby") {
     throw new GameError("Das Spiel läuft schon. Warte, bis die Runde vorbei ist.");
   }
+  if (seatOf(s, player.tokenHash)) throw new GameError("Mit diesem Gerät bist du schon in diesem Raum.");
   if (s.players.length >= MAX_PLAYERS) throw new GameError("Der Raum ist voll.");
   const name = cleanName(player.name);
   if (s.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
@@ -159,10 +161,15 @@ export function addPlayer(
   return s;
 }
 
+/** The seat a device already holds in this room, found by its token. */
+export function seatOf(s: GameState, tokenHash: string): Player | undefined {
+  return tokenHash ? s.players.find((p) => p.tokenHash === tokenHash) : undefined;
+}
+
 /** Hands the room to another player, used when the host has gone offline. */
 export function transferHost(state: GameState, to: string): GameState {
   const s = structuredClone(state);
-  if (s.players.some((p) => p.id === to)) s.hostId = to;
+  if (s.players.some((p) => p.id === to && !p.left)) s.hostId = to;
   return s;
 }
 
@@ -177,7 +184,12 @@ export function requestRejoin(
   now: number,
 ): GameState {
   const s = structuredClone(state);
-  if (!find(s, playerId)) throw new GameError("Diesen Spieler gibt es in diesem Raum nicht.");
+  const seat = find(s, playerId);
+  if (!seat) throw new GameError("Diesen Spieler gibt es in diesem Raum nicht.");
+  if (seat.left) throw new GameError(`${seat.name} hat das Spiel verlassen.`);
+  // Asking for the seat this device already holds: nothing to do.
+  if (seat.tokenHash === request.tokenHash) return s;
+  if (seatOf(s, request.tokenHash)) throw new GameError("Mit diesem Gerät spielst du hier schon mit.");
   s.rejoins = s.rejoins.filter((r) => r.playerId !== playerId && now - r.at < REJOIN_TTL).slice(-9);
   s.rejoins.push({ id: request.id, playerId, tokenHash: request.tokenHash, at: now });
   return s;
@@ -191,10 +203,10 @@ export function openRejoins(s: GameState, now: number) {
 export function ackers(s: GameState): Player[] {
   switch (s.phase) {
     case "roles":
-      return s.players;
+      return s.players.filter((p) => !p.left);
     case "announce": {
       const alive = living(s);
-      return alive.length > 0 ? alive : s.players;
+      return alive.length > 0 ? alive : s.players.filter((p) => !p.left);
     }
     case "discussion":
       return living(s);
@@ -205,14 +217,10 @@ export function ackers(s: GameState): Player[] {
 
 function toLobby(s: GameState) {
   const keep = { code: s.code, createdAt: s.createdAt, hostId: s.hostId, settings: s.settings };
-  const players = s.players.map((p) => ({
-    ...p,
-    role: null,
-    alive: true,
-    turned: false,
-    enchanted: false,
-    exposed: false,
-  }));
+  // Whoever left the last round is gone now; everybody else starts fresh.
+  const players = s.players
+    .filter((p) => !p.left)
+    .map((p) => ({ ...p, role: null, alive: true, turned: false, enchanted: false, exposed: false }));
   Object.assign(s, defaults(), keep, { players, rejoins: s.rejoins, handled: s.handled });
 }
 
@@ -285,7 +293,7 @@ function afterAnnounce(s: GameState, ctx: Ctx) {
     const decided = checkWinner(s);
     // The Jäger may still turn a win of the wolves or of a loner.
     const matters = !decided || (next.kind === "hunter" && decided !== "dorf" && decided !== "niemand");
-    if (find(s, next.who) && living(s).some((p) => p.id !== next.who) && matters) {
+    if (find(s, next.who) && !find(s, next.who)!.left && living(s).some((p) => p.id !== next.who) && matters) {
       s.phase = next.kind;
       s.acks = [];
       return;
@@ -403,6 +411,78 @@ function choose(s: GameState, me: Player, targets: string[]) {
   announce(s, { kind: "succession", deaths: [], captain: ids[0] });
 }
 
+/**
+ * A player leaves a running or finished game. They are out for this round
+ * and their role is shown, but leaving sets nothing off: no shot of the
+ * Jäger, no grief of a lover, no win for the Engel. The device loses its seat.
+ * Afterwards the game moves on if it was only waiting for them.
+ */
+function leaveGame(s: GameState, me: Player, ctx: Ctx) {
+  me.left = true;
+  me.tokenHash = "";
+  s.acks = s.acks.filter((id) => id !== me.id);
+  s.rejoins = s.rejoins.filter((r) => r.playerId !== me.id);
+  if (s.hostId === me.id) s.hostId = s.players.find((p) => !p.left)?.id ?? "";
+  if (s.phase === "ended") return;
+
+  me.alive = false;
+  log(s, `${me.name} hat das Spiel verlassen (${roleName(me.role)}).`, false);
+  if (s.lovers?.includes(me.id)) s.lovers = null;
+  const waitedFor = s.pending[0]?.who === me.id;
+  s.pending = s.pending.filter((p) => p.who !== me.id);
+  if (s.captain === me.id) {
+    const heirs = living(s);
+    s.captain = heirs.length > 0 ? heirs[Math.floor(ctx.rng() * heirs.length)].id : null;
+    if (s.captain) log(s, `${nameOf(s, s.captain)} ist jetzt Hauptmann (durch Los).`, false);
+  }
+  // Votes by or for the leaver no longer count; whoever voted for them votes again.
+  for (const [voter, target] of Object.entries(s.vote.ballots)) {
+    if (voter === me.id || target === me.id) delete s.vote.ballots[voter];
+  }
+  if (s.vote.candidates) {
+    const left = s.vote.candidates.filter((id) => id !== me.id);
+    s.vote.candidates = left.length > 0 ? left : null;
+  }
+  if (s.phase === "night") {
+    const n = s.night;
+    for (const [wolf, target] of Object.entries(n.wolfVotes)) {
+      if (wolf === me.id || target === me.id) delete n.wolfVotes[wolf];
+    }
+    // The pack had chosen the leaver: while they are still awake, they choose again.
+    if (n.victim === me.id && n.step === "haupt") {
+      n.victim = null;
+      n.done = n.done.filter((key) => !key.endsWith(":wolf"));
+    }
+  }
+
+  const winner = checkWinner(s);
+  if (winner) return end(s, winner);
+  switch (s.phase) {
+    case "roles":
+      if (ackComplete(s)) afterRoles(s, ctx);
+      break;
+    case "announce":
+      if (ackComplete(s)) afterAnnounce(s, ctx);
+      break;
+    case "discussion":
+      if (ackComplete(s)) startVote(s);
+      break;
+    case "night":
+      settleWolves(s);
+      advanceNight(s, ctx);
+      break;
+    case "vote":
+    case "election":
+      countVotes(s, ctx);
+      break;
+    case "hunter":
+    case "succession":
+    case "scapegoat":
+      if (waitedFor) afterAnnounce(s, ctx);
+      break;
+  }
+}
+
 /** Host escape hatch: finish the current phase with whatever has been entered. */
 function force(s: GameState, ctx: Ctx) {
   switch (s.phase) {
@@ -435,7 +515,7 @@ function changeSettings(s: GameState, input: Partial<Settings>) {
   if (typeof auto === "boolean") {
     s.settings.auto = auto;
     if (!auto && !counts && Object.keys(s.settings.counts).length === 0) {
-      s.settings.counts = countsOf(autoRoles(Math.max(FREE_CHOICE_FROM, s.players.length)));
+      s.settings.counts = countsOf(autoRoles(Math.max(MIN_PLAYERS, s.players.length)));
     }
   }
   if (typeof captain === "boolean") s.settings.captain = captain;
@@ -469,6 +549,7 @@ export function applyAction(
   const s = structuredClone(state);
   const me = find(s, playerId);
   if (!me) throw new GameError("Du bist nicht in diesem Raum.");
+  if (me.left) throw new GameError("Du hast das Spiel verlassen.");
   const isHost = s.hostId === me.id;
   const hostOnly = () => {
     if (!isHost) throw new GameError("Das darf nur die Spielleitung.");
@@ -502,10 +583,13 @@ export function applyAction(
       break;
 
     case "leave":
-      inPhase("lobby");
-      s.players = s.players.filter((p) => p.id !== me.id);
-      s.ready = s.ready.filter((id) => id !== me.id);
-      if (isHost) s.hostId = s.players[0]?.id ?? "";
+      if (s.phase === "lobby") {
+        s.players = s.players.filter((p) => p.id !== me.id);
+        s.ready = s.ready.filter((id) => id !== me.id);
+        if (isHost) s.hostId = s.players[0]?.id ?? "";
+      } else {
+        leaveGame(s, me, ctx);
+      }
       break;
 
     case "start":
@@ -578,7 +662,11 @@ export function applyAction(
       if (!request) throw new GameError("Diese Anfrage gibt es nicht mehr.");
       s.rejoins = s.rejoins.filter((r) => r.playerId !== request.playerId);
       const seat = find(s, request.playerId);
-      if (action.accept && seat) seat.tokenHash = request.tokenHash;
+      if (action.accept && seat && !seat.left) {
+        const holder = seatOf(s, request.tokenHash);
+        if (holder && holder.id !== seat.id) throw new GameError("Dieses Gerät hat inzwischen schon einen Platz.");
+        seat.tokenHash = request.tokenHash;
+      }
       break;
     }
 

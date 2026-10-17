@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { requestRejoin } from "@/lib/game/engine";
-import { handle, json, newCredentials, normalizeCode, readJson } from "@/lib/server/api";
+import { deviceFrom, handle, json, newCredentials, normalizeCode, readJson } from "@/lib/server/api";
 import { mutate, RoomNotFound } from "@/lib/server/store";
 
 /**
@@ -11,9 +11,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/rooms/[code
   return handle(async () => {
     const code = normalizeCode((await ctx.params).code);
     if (!code) throw new RoomNotFound();
-    const { playerId } = await readJson(request);
-    const seat = String(playerId ?? "");
-    const { token, tokenHash } = newCredentials();
+    const body = await readJson(request);
+    const seat = String(body.playerId ?? "");
+    const { token, tokenHash } = newCredentials(deviceFrom(body));
     const requestId = randomBytes(8).toString("base64url");
     await mutate(code, (room) => requestRejoin(room.state, seat, { id: requestId, tokenHash }, Date.now()));
     return json({ code, id: seat, token });

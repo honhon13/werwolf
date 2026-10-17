@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Action, GameState, View } from "../game/types";
-import { loadCredentials, saveCredentials, store, stored } from "./storage";
+import { deviceKey, loadCredentials, saveCredentials, store, stored } from "./storage";
 
 const POLL_MS = 1500;
 
@@ -55,7 +55,7 @@ export async function createRoom(name: string): Promise<{ code?: string; error?:
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, device: deviceKey() }),
     });
     const data = await res.json();
     if (!res.ok) return { error: data.error ?? "Das hat nicht geklappt." };
@@ -72,7 +72,7 @@ export async function joinRoom(code: string, name: string): Promise<{ error?: st
     const res = await fetch(`/api/rooms/${code}/join`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, device: deviceKey() }),
     });
     const data = await res.json();
     if (!res.ok) return { error: data.error ?? "Das hat nicht geklappt." };
@@ -225,7 +225,7 @@ export function useRoom(code: string) {
         const res = await fetch(`/api/rooms/${code}/rejoin`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ playerId: seat.id }),
+          body: JSON.stringify({ playerId: seat.id, device: deviceKey() }),
         });
         const data = await res.json();
         if (!res.ok) {

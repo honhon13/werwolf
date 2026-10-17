@@ -81,7 +81,11 @@ export type Winner = "dorf" | "wolf" | "paar" | "niemand" | "floetenspieler" | "
 export interface Player {
   id: string;
   name: string;
-  /** sha256 of the player's secret token. Never leaves the server. */
+  /**
+   * sha256 of the player's secret token. Devices that send their own device
+   * key use it as the token, so one device can only hold one seat per room.
+   * Never leaves the server; empty once the player has left.
+   */
   tokenHash: string;
   /** The card the player holds. Changes only through the Dieb. */
   role: RoleId | null;
@@ -91,6 +95,8 @@ export interface Player {
   enchanted: boolean;
   /** A Dorfdepp the village voted out: alive, but without a vote. */
   exposed: boolean;
+  /** Left a running game: out for this round, removed when the next one starts. */
+  left?: boolean;
 }
 
 export interface Settings {
@@ -323,6 +329,8 @@ export interface PublicPlayer {
   lover: boolean;
   captain: boolean;
   exposed: boolean;
+  /** Left the game; counts as out. */
+  left: boolean;
   /** Finished the current phase. Hidden at night so nobody is exposed. */
   done: boolean;
 }

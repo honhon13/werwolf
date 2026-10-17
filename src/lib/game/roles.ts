@@ -2,8 +2,8 @@ import type { Mode, RoleId, Settings, Source, Team } from "./types";
 
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 18;
-/** Fewer players than this get a fixed variant instead of free role choice. */
-export const FREE_CHOICE_FROM = 5;
+/** Roles that need at least this many players to be playable. */
+const NEEDS_FIVE: RoleId[] = ["floetenspieler", "wolfshund"];
 
 export type Category = "grund" | "info" | "sonder" | "erweiterung";
 
@@ -360,7 +360,7 @@ export function modeFor(n: number): Mode {
   return n === 3 ? "kurz" : n === 4 ? "vier" : "normal";
 }
 
-/** The fixed roles of the two small variants. */
+/** The suggested roles of the two small variants. */
 const SMALL: Record<Exclude<Mode, "normal">, RoleId[]> = {
   kurz: ["werwolf", "seherin", "dorfbewohner"],
   vier: ["werwolf", "seherin", "beschuetzer", "dorfbewohner"],
@@ -382,8 +382,10 @@ const AUTO_SPECIALS: RoleId[] = [
   "wildesKind",
 ];
 
-/** A balanced set of cards for n players (5 to 18). */
+/** A balanced set of cards for n players. */
 export function autoRoles(n: number): RoleId[] {
+  const mode = modeFor(n);
+  if (mode !== "normal") return [...SMALL[mode]];
   const wolves = n <= 5 ? 1 : n <= 11 ? 2 : n <= 16 ? 3 : 4;
   const plain = n >= 10 ? 2 : 1;
   const specials = AUTO_SPECIALS.slice(0, Math.max(0, n - wolves - plain));
@@ -421,8 +423,10 @@ export function problem(n: number, roles: RoleId[]): string | null {
     const extra = roles.includes("dieb") ? " (mit Dieb zwei mehr als Spieler)" : "";
     return `Gewählt sind ${roles.length} Karten, gebraucht werden ${needed}${extra}.`;
   }
-  if (!roles.some((r) => r === "werwolf" || r === "urwolf" || r === "grosserWolf")) {
-    return "Es braucht mindestens einen Werwolf, Urwolf oder Großen bösen Wolf.";
+  if (!roles.includes("werwolf")) return "Es braucht mindestens einen Werwolf.";
+  if (n < 5) {
+    const role = NEEDS_FIVE.find((r) => roles.includes(r));
+    if (role) return `${ROLES[role].was.replace(/^d/, "D")} braucht mindestens 5 Spieler.`;
   }
   const hunters = roles.filter((r) => ROLES[r].hunts).length;
   if (hunters * 2 >= n) {
@@ -439,8 +443,6 @@ export function composition(
 ): { roles: RoleId[]; error: null } | { roles: null; error: string } {
   if (n < MIN_PLAYERS) return { roles: null, error: `Ihr braucht mindestens ${MIN_PLAYERS} Spieler.` };
   if (n > MAX_PLAYERS) return { roles: null, error: `Es können höchstens ${MAX_PLAYERS} Spieler mitspielen.` };
-  const mode = modeFor(n);
-  if (mode !== "normal") return { roles: [...SMALL[mode]], error: null };
   const roles = settings.auto ? autoRoles(n) : cards(settings.counts);
   const error = problem(n, roles);
   return error ? { roles: null, error } : { roles, error: null };

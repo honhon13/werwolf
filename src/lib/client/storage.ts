@@ -37,6 +37,22 @@ function subscribe(onChange: () => void) {
   };
 }
 
+let device: string | null = null;
+
+/**
+ * A secret that stays with this browser. The server knows the device by it
+ * and gives it at most one seat per room, also after the room was left.
+ */
+export function deviceKey(): string {
+  device ??= stored("device");
+  if (!device) {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    device = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    store("device", device);
+  }
+  return device;
+}
+
 /** A localStorage value that is null during server rendering. */
 export function useStored(key: string): string | null {
   return useSyncExternalStore(

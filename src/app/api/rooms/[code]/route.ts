@@ -17,11 +17,11 @@ import { getStore, mutate, RoomNotFound, type Room } from "@/lib/server/store";
 function heir(room: Room, now: number): string | null {
   const { state, seen } = room;
   const hostSeen = seen[state.hostId] ?? Math.floor(state.createdAt / 1000);
-  if (state.players.some((p) => p.id === state.hostId) && hostSeen >= now - HOST_AWAY_AFTER) {
+  if (state.players.some((p) => p.id === state.hostId && !p.left) && hostSeen >= now - HOST_AWAY_AFTER) {
     return null;
   }
   const online = onlineIds(room, now);
-  return state.players.find((p) => online.has(p.id))?.id ?? null;
+  return state.players.find((p) => online.has(p.id) && !p.left)?.id ?? null;
 }
 
 export async function GET(request: Request, ctx: RouteContext<"/api/rooms/[code]">) {
@@ -36,11 +36,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/rooms/[code]
     const me = member(room.state, creds);
     if (!me) {
       const online = onlineIds(room, now);
+      // Whoever left this round cannot take a seat back.
+      const present = room.state.players.filter((p) => !p.left);
       const guest: GuestResponse = {
         member: false,
         phase: room.state.phase,
-        players: room.state.players.map((p) => p.name),
-        seats: room.state.players.map((p) => ({ id: p.id, name: p.name, online: online.has(p.id) })),
+        players: present.map((p) => p.name),
+        seats: present.map((p) => ({ id: p.id, name: p.name, online: online.has(p.id) })),
       };
       return json(guest);
     }

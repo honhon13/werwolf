@@ -27,9 +27,18 @@ export function normalizeCode(raw: string): string | null {
   return /^[A-Z]{4}$/.test(code) ? code : null;
 }
 
-export function newCredentials() {
-  const token = randomBytes(24).toString("base64url");
+/**
+ * A new seat. A device that sends its own key gets that key as its token, so
+ * the server recognises the device again and never gives it a second seat.
+ */
+export function newCredentials(device?: string) {
+  const token = device ?? randomBytes(24).toString("base64url");
   return { id: randomBytes(6).toString("base64url"), token, tokenHash: hashToken(token) };
+}
+
+/** The device key a request carries, if it looks like one. */
+export function deviceFrom(body: Record<string, unknown>): string | undefined {
+  return typeof body.device === "string" && /^[\w-]{20,128}$/.test(body.device) ? body.device : undefined;
 }
 
 export interface Credentials {
