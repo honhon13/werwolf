@@ -2,6 +2,7 @@ import { mayVoteFor, tallyElection, tallyVerdict, voters } from "./day";
 import { kill } from "./death";
 import {
   advanceTo,
+  decideForAbsent,
   endStep,
   forceStep,
   freshNight,
@@ -18,6 +19,8 @@ import {
   composition,
   countsOf,
   deal,
+  DECISION_MS,
+  GRACE_MS,
   MAX_PLAYERS,
   MIN_PLAYERS,
   modeFor,
@@ -35,6 +38,12 @@ export { GameError } from "./state";
 const NAME_MAX = 14;
 /** Rejoin requests older than this are dropped. */
 const REJOIN_TTL = 15 * 60 * 1000;
+const DECIDING: GameState["phase"][] = ["night", "vote", "election", "hunter", "succession", "scapegoat"];
+
+/** Starts the clock for a decision. */
+function decide(s: GameState, ctx: Ctx) {
+  s.deadline = ctx.now + DECISION_MS;
+}
 
 export function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new GameError("Bitte gib einen Namen ein.");
@@ -271,6 +280,7 @@ function advanceNight(s: GameState, ctx: Ctx) {
     const next = STEPS.slice(from).find((step) => stepHasWork(s, step));
     if (next) {
       advanceTo(s, next);
+      decide(s, ctx);
       continue;
     }
     announce(s, resolveNight(s), "day");
@@ -296,6 +306,7 @@ function afterAnnounce(s: GameState, ctx: Ctx) {
     if (find(s, next.who) && !find(s, next.who)!.left && living(s).some((p) => p.id !== next.who) && matters) {
       s.phase = next.kind;
       s.acks = [];
+      decide(s, ctx);
       return;
     }
     s.pending.shift();
@@ -311,7 +322,7 @@ function proceed(s: GameState, ctx: Ctx) {
     if (s.mode === "kurz" && s.round >= 1) return end(s, "wolf");
     return startNight(s, ctx);
   }
-  if (s.after === "discussion") return startDiscussion(s, ctx);
+  if (s.after === "discussion") return startVote(s, ctx);
   startDay(s, ctx);
 }
 
@@ -319,23 +330,23 @@ function startDay(s: GameState, ctx: Ctx) {
   if (s.settings.captain && s.mode === "normal" && !s.captainElected) {
     s.phase = "election";
     s.acks = [];
-    s.deadline = null;
+    decide(s, ctx);
     s.vote = { kind: "election", round: 1, candidates: null, ballots: {}, previous: null };
     return;
   }
-  startDiscussion(s, ctx);
+  startVote(s, ctx);
 }
 
-function startDiscussion(s: GameState, ctx: Ctx) {
-  s.phase = "discussion";
-  s.acks = [];
-  s.deadline = s.settings.discussionSeconds > 0 ? ctx.now + s.settings.discussionSeconds * 1000 : null;
-}
-
-function startVote(s: GameState) {
+/**
+ * The day: the village talks and votes at once, for as long as the host set
+ * ("Zeit zum Diskutieren"). Votes may change until the time is up. Without a
+ * time limit, the votes are counted as soon as everybody has voted.
+ * Rooms saved during a separate discussion phase also end up here.
+ */
+function startVote(s: GameState, ctx: Ctx) {
   s.phase = "vote";
   s.acks = [];
-  s.deadline = null;
+  s.deadline = s.settings.discussionSeconds > 0 ? ctx.now + s.settings.discussionSeconds * 1000 : null;
   s.vote = { kind: "lynch", round: 1, candidates: null, ballots: {}, previous: null };
   if (voters(s).length === 0) {
     log(s, "Heute durfte niemand abstimmen.", false);
@@ -345,15 +356,64 @@ function startVote(s: GameState) {
   }
 }
 
-function countVotes(s: GameState, ctx: Ctx) {
+/** Counts once everybody has voted; a verdict with a time limit only when `final`. */
+function countVotes(s: GameState, ctx: Ctx, final = false) {
   if (!voters(s).every((p) => p.id in s.vote.ballots)) return;
-  if (s.vote.kind === "election") {
-    const result = tallyElection(s, ctx);
-    if (result) announce(s, result, "discussion");
-  } else {
-    const result = tallyVerdict(s);
-    if (result) announce(s, result, "night");
+  if (!final && s.vote.kind === "lynch" && s.deadline !== null) return;
+  const election = s.vote.kind === "election";
+  const result = election ? tallyElection(s, ctx) : tallyVerdict(s);
+  if (result) announce(s, result, election ? "discussion" : "night");
+  // A tie: the runoff gets its own time.
+  else decide(s, ctx);
+}
+
+/** Whether the time of the current phase is up, with grace for decisions on their way. */
+export function isOverdue(s: GameState, now: number): boolean {
+  if (s.deadline === null) return false;
+  if (s.phase === "discussion") return now >= s.deadline;
+  return DECIDING.includes(s.phase) && now >= s.deadline + GRACE_MS;
+}
+
+/**
+ * The time is up: whoever has not decided gets the automatic choice, then
+ * the game moves on. Only ever runs once per deadline, because every way on
+ * either sets a new deadline or none.
+ */
+function expire(s: GameState, ctx: Ctx) {
+  const pick = <T>(items: T[]) => items[Math.floor(ctx.rng() * items.length)];
+  switch (s.phase) {
+    case "discussion":
+      return startVote(s, ctx);
+    case "night":
+      decideForAbsent(s, ctx.rng);
+      return advanceNight(s, ctx);
+    case "vote":
+    case "election":
+      for (const p of voters(s)) {
+        if (p.id in s.vote.ballots) continue;
+        // A verdict needs a name: a random player the voter could have chosen.
+        // The Hauptmann election allows abstaining, so nobody is chosen by chance there.
+        const valid = s.vote.kind === "lynch" ? living(s).filter((t) => mayVoteFor(s, p, t)) : [];
+        s.vote.ballots[p.id] = valid.length > 0 ? pick(valid).id : null;
+      }
+      return countVotes(s, ctx, true);
+    case "hunter":
+    case "succession":
+    case "scapegoat": {
+      const who = find(s, s.pending[0]!.who)!;
+      const others = living(s).filter((p) => p.id !== who.id).map((p) => p.id);
+      // The Jäger must shoot and a new Hauptmann must be named; the Sündenbock lets everybody vote.
+      return choose(s, who, s.phase === "scapegoat" ? others : [pick(others)]);
+    }
   }
+}
+
+/** The state with an expired deadline dealt with, or the same state if nothing is due. */
+export function expireIfDue(state: GameState, ctx: Ctx): GameState {
+  if (!isOverdue(state, ctx.now)) return state;
+  const s = structuredClone(state);
+  expire(s, ctx);
+  return s;
 }
 
 const WINNER_TEXT: Record<Winner, string> = {
@@ -465,7 +525,7 @@ function leaveGame(s: GameState, me: Player, ctx: Ctx) {
       if (ackComplete(s)) afterAnnounce(s, ctx);
       break;
     case "discussion":
-      if (ackComplete(s)) startVote(s);
+      if (ackComplete(s)) startVote(s, ctx);
       break;
     case "night":
       settleWolves(s);
@@ -500,11 +560,11 @@ function force(s: GameState, ctx: Ctx) {
       s.pending.shift();
       return afterAnnounce(s, ctx);
     case "discussion":
-      return startVote(s);
+      return startVote(s, ctx);
     case "election":
     case "vote":
       for (const p of voters(s)) if (!(p.id in s.vote.ballots)) s.vote.ballots[p.id] = null;
-      return countVotes(s, ctx);
+      return countVotes(s, ctx, true);
     default:
       throw new GameError("Hier gibt es nichts zu überspringen.");
   }
@@ -560,6 +620,10 @@ export function applyAction(
   const mustLive = () => {
     if (!me.alive) throw new GameError("Du bist schon ausgeschieden.");
   };
+  // Server time decides; the automatic choice is made on the next request.
+  const inTime = () => {
+    if (isOverdue(s, ctx.now)) throw new GameError("Zu spät – die Zeit ist abgelaufen.");
+  };
 
   switch (action.type) {
     case "settings":
@@ -605,13 +669,14 @@ export function applyAction(
       if (ackComplete(s)) {
         if (s.phase === "roles") afterRoles(s, ctx);
         else if (s.phase === "announce") afterAnnounce(s, ctx);
-        else startVote(s);
+        else startVote(s, ctx);
       }
       break;
 
     case "night":
       inPhase("night");
       mustLive();
+      inTime();
       nightAction(s, me, action);
       advanceNight(s, ctx);
       break;
@@ -620,6 +685,12 @@ export function applyAction(
       inPhase("vote", "election");
       mustLive();
       if (!voters(s).some((p) => p.id === me.id)) throw new GameError("Du darfst diesmal nicht abstimmen.");
+      inTime();
+      // A verdict vote may change until the time is up and always names somebody;
+      // the Hauptmann election is final and allows abstaining.
+      const verdict = s.vote.kind === "lynch";
+      if (!verdict && me.id in s.vote.ballots) throw new GameError("Du hast schon abgestimmt.");
+      if (verdict && action.target === null) throw new GameError("Wähle einen Mitspieler.");
       let target: string | null = null;
       if (action.target !== null) {
         const t = find(s, action.target);
@@ -632,11 +703,12 @@ export function applyAction(
     }
 
     case "choose":
+      inTime();
       choose(s, me, action.targets ?? []);
       break;
 
     case "tick":
-      if (s.phase === "discussion" && s.deadline !== null && ctx.now >= s.deadline) startVote(s);
+      if (isOverdue(s, ctx.now)) expire(s, ctx);
       break;
 
     case "force":

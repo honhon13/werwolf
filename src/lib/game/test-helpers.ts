@@ -1,7 +1,8 @@
 import { expect } from "vitest";
-import { addPlayer, applyAction, GameError, newGame } from "./engine";
+import { voters } from "./day";
+import { addPlayer, applyAction, expireIfDue, GameError, newGame } from "./engine";
 import { tasksOf } from "./night";
-import { ACTOR_POWERS, modeFor } from "./roles";
+import { ACTOR_POWERS, GRACE_MS, modeFor } from "./roles";
 import type { Action, GameState, RoleId, TaskId } from "./types";
 import { viewFor } from "./view";
 
@@ -84,18 +85,29 @@ export function ackAll(s: GameState, rng?: () => number): GameState {
   return s;
 }
 
-/** From the morning announcement to the vote. */
+/** Lets the time of the current phase run out, grace included. */
+export const timeUp = (s: GameState, rng?: () => number) => expireIfDue(s, ctx(rng, s.deadline! + GRACE_MS));
+
+/** From the morning announcement to the day's vote. */
 export function toVote(s: GameState): GameState {
   expect(s.phase).toBe("announce");
-  s = ackAll(s);
-  expect(s.phase).toBe("discussion");
   s = ackAll(s);
   expect(s.phase).toBe("vote");
   return s;
 }
 
+/**
+ * Casts these ballots. A verdict cannot abstain any more, so null stands for
+ * "did not vote". Once everybody listed is done, the vote ends as when the
+ * host skips the rest of the time: who did not vote counts as abstaining.
+ */
 export function votes(s: GameState, ballots: Record<string, string | null>, rng?: () => number): GameState {
-  for (const [voter, target] of Object.entries(ballots)) s = act(s, voter, { type: "vote", target }, rng);
+  for (const [voter, target] of Object.entries(ballots)) {
+    if (target === null && s.vote.kind === "lynch") continue;
+    s = act(s, voter, { type: "vote", target }, rng);
+  }
+  const all = Object.keys(ballots);
+  if (s.phase === "vote" && voters(s).every((p) => all.includes(p.id))) s = act(s, s.hostId, { type: "force" }, rng);
   return s;
 }
 

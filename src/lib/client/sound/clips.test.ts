@@ -33,7 +33,7 @@ describe("clipFor", () => {
     s = night(s, "p2", "hexe", {});
     expect(clipFor(see(s, "p3"))).toBe("morgenOpfer");
     s = toVote(s);
-    expect(clipFor(see(s, "p3"))).toBe("abstimmung");
+    expect(clipFor(see(s, "p3"))).toBe("diskussion");
     s = votes(s, { p0: null, p1: null, p2: null, p3: null, p4: null });
     expect(clipFor(see(s, "p3"))).toBe("urteilNiemand");
     s = ackAll(s);

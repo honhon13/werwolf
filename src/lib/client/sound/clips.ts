@@ -92,7 +92,8 @@ export function clipFor(view: View): ClipId | null {
     case "discussion":
       return "diskussion";
     case "vote":
-      return view.vote?.round === 2 ? "stichwahl" : "abstimmung";
+      // The day opens with talking and voting at once, so it starts with the discussion line.
+      return view.vote?.round === 2 ? "stichwahl" : "diskussion";
     case "ended":
       switch (view.ended?.winner) {
         case "dorf":

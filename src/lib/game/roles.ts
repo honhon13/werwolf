@@ -2,6 +2,11 @@ import type { Mode, RoleId, Settings, Source, Team } from "./types";
 
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 18;
+/** Time for every decision: a night step, a round of voting, a last choice. */
+export const DECISION_MS = 20_000;
+/** A decision sent just before the end may arrive this much later and still counts. */
+export const GRACE_MS = 1_000;
+
 /** Roles that need at least this many players to be playable. */
 const NEEDS_FIVE: RoleId[] = ["floetenspieler", "wolfshund"];
 
@@ -315,7 +320,7 @@ export const ROLES: Record<RoleId, RoleInfo> = {
     max: 1,
     village: true,
     goal: VILLAGE,
-    text: "Zu Spielbeginn bekommst du drei Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe. In jeder Nacht darfst du eine davon für diese Nacht benutzen, jede nur einmal.",
+    text: "Zu Spielbeginn bekommst du vier Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe. In jeder Nacht darfst du eine davon für diese Nacht benutzen, jede nur einmal.",
   },
 };
 

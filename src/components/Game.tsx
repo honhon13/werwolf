@@ -4,14 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useGameSound, useSoundSettings } from "@/lib/client/sound/useSound";
 import type { RoomApi } from "@/lib/client/useRoom";
-import { ROLES, roleText } from "@/lib/game/roles";
+import { DECISION_MS, GRACE_MS, ROLES, roleText } from "@/lib/game/roles";
 import type { Phase, View } from "@/lib/game/types";
 import { AnnouncePhase, DiscussionPhase, EndedPhase, PendingPhase, VotePhase } from "./phases/Day";
 import { Lobby } from "./phases/Lobby";
 import { NightPhase, RolesPhase } from "./phases/Night";
 import { nameOf, names, NoteText } from "./phases/shared";
 import { Rules } from "./Rules";
-import { Button, Card, RoleChips, Sheet } from "./ui";
+import { Button, Card, cx, RoleChips, Sheet } from "./ui";
 
 const day = (v: View) => `Tag ${v.round}`;
 
@@ -192,6 +192,66 @@ function Rejoins({ view, api }: { view: View; api: RoomApi }) {
   );
 }
 
+/** Phases in which players decide something within the time limit. */
+const TIMED: Phase[] = ["night", "vote", "election", "hunter", "succession", "scapegoat"];
+
+/**
+ * The seconds left for a decision, counted against the server's clock so
+ * that every device shows the same. Right after the end it asks for the
+ * result instead of waiting for the next poll.
+ */
+function DecisionTimer({
+  deadline,
+  total,
+  clockOffset,
+  onOver,
+}: {
+  deadline: number;
+  /** The full time of the phase, for the bar. */
+  total: number;
+  clockOffset: number;
+  onOver: () => void;
+}) {
+  const [left, setLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    let asked = false;
+    const tick = () => {
+      const ms = deadline - (Date.now() + clockOffset);
+      setLeft(Math.max(0, ms));
+      if (ms < -GRACE_MS - 250 && !asked) {
+        asked = true;
+        onOver();
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 200);
+    return () => clearInterval(timer);
+  }, [deadline, clockOffset, onOver]);
+
+  if (left === null) return null;
+  const seconds = Math.ceil(left / 1000);
+  const hurry = seconds <= 5;
+  const shown = seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : `${seconds}s`;
+  return (
+    <div
+      role="timer"
+      aria-label={`Noch ${seconds} Sekunden`}
+      className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-card px-3 py-2"
+    >
+      <span className={cx("w-16 text-center font-display text-3xl font-extrabold tabular-nums", hurry && "text-danger")}>
+        {shown}
+      </span>
+      <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-card-strong">
+        <span
+          className={cx("block h-full rounded-full transition-[width] duration-200 ease-linear", hurry ? "bg-danger" : "bg-accent")}
+          style={{ width: `${Math.min(1, left / total) * 100}%` }}
+        />
+      </span>
+    </div>
+  );
+}
+
 type Panel = "menu" | "rules" | "role" | null;
 
 export function Game({ view, clockOffset, api }: { view: View; clockOffset: number; api: RoomApi }) {
@@ -268,6 +328,15 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
         </nav>
 
         {view.me.host && <Rejoins view={view} api={api} />}
+        {TIMED.includes(view.phase) && view.deadline !== null && (
+          <DecisionTimer
+            deadline={view.deadline}
+            // The day's first vote runs for the time the host set, everything else for 20 seconds.
+            total={view.vote?.kind === "lynch" && view.vote.round === 1 ? view.setup.discussionSeconds * 1000 : DECISION_MS}
+            clockOffset={clockOffset}
+            onOver={api.reload}
+          />
+        )}
 
         {/* The key resets picked players whenever the game moves on. */}
         <main

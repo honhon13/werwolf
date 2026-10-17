@@ -92,7 +92,7 @@ describe("leaving a running game", () => {
     for (const id of ["p0", "p1", "p2", "p3"]) s = act(s, id, { type: "ack" });
     expect(s.phase).toBe("announce");
     s = leave(s, "p4");
-    expect(s.phase).toBe("discussion");
+    expect(s.phase).toBe("vote");
   });
 
   it("drops the Jäger's last shot when he leaves instead", () => {
@@ -101,7 +101,7 @@ describe("leaving a running game", () => {
     s = ackAll(s);
     expect(s.phase).toBe("hunter");
     s = leave(s, "p1");
-    expect(s.phase).toBe("discussion");
+    expect(s.phase).toBe("vote");
     expect([2, 3, 4].every((i) => alive(s, `p${i}`))).toBe(true);
   });
 

@@ -378,6 +378,77 @@ export function endStep(s: GameState, ctx: Ctx) {
   }
 }
 
+/**
+ * What the game decides for a player whose time ran out: a random choice
+ * where the task requires one, and no use where a power may be left unused,
+ * so chance never wastes a potion or marks somebody.
+ */
+function automatic(s: GameState, me: Player, task: TaskId, rng: () => number): NightAction | null {
+  const pick = <T>(items: T[]) => items[Math.floor(rng() * items.length)];
+  const all = living(s).map((p) => p.id);
+  const others = all.filter((id) => id !== me.id);
+  const one = (ids: string[]): NightAction => ({ type: "night", task, targets: ids.length > 0 ? [pick(ids)] : [] });
+  switch (task) {
+    case "dieb":
+      return { type: "night", task, option: pick(s.center.every((r) => ROLES[r].hunts) ? ["0", "1"] : ["0", "1", "keep"]) };
+    case "amor": {
+      const first = pick(all);
+      return { type: "night", task, targets: [first, pick(all.filter((id) => id !== first))] };
+    }
+    case "wolfshund":
+      return { type: "night", task, option: pick(["dorf", "wolf"]) };
+    case "wolf":
+      return one(prey(s).map((p) => p.id));
+    case "beschuetzer":
+      return one(all.filter((id) => id !== s.lastProtected));
+    case "fuchs":
+      return one(all);
+    case "floetenspieler": {
+      const open = enchantable(s, me).map((p) => p.id);
+      const first = pick(open);
+      return { type: "night", task, targets: open.length > 1 ? [first, pick(open.filter((id) => id !== first))] : [first] };
+    }
+    case "grosserWolf":
+      return one(prey(s).filter((p) => p.id !== s.night.victim).map((p) => p.id));
+    case "wildesKind":
+    case "seherin":
+      return one(others);
+    case "rabe":
+    case "weisserWolf":
+      return { type: "night", task, targets: [] };
+    case "schauspieler":
+      return { type: "night", task, option: "pass" };
+    case "maedchen":
+      return { type: "night", task, option: "stay" };
+    case "urwolf":
+      return { type: "night", task, option: "kill" };
+    case "hexe":
+      return { type: "night", task, heal: null, poison: null };
+    default:
+      // Decoys (sleep, suspect, lurk) decide nothing; a guess is not invented.
+      return null;
+  }
+}
+
+/** The step's time is up: everybody who has not acted gets the automatic choice. */
+export function decideForAbsent(s: GameState, rng: () => number) {
+  for (const p of living(s)) {
+    for (const task of tasksOf(s, p)) {
+      if (taskDone(s, p, task) || (task === "wolf" && s.night.wolfVotes[p.id])) continue;
+      const action = automatic(s, p, task, rng);
+      if (action) {
+        try {
+          nightAction(s, p, action);
+        } catch (e) {
+          if (!(e instanceof GameError)) throw e;
+        }
+      }
+    }
+  }
+  // Wolves who still disagree: the step ends with the victim most of them chose.
+  forceStep(s);
+}
+
 /** Fills in what nobody entered, so the host can move a stuck night on. */
 export function forceStep(s: GameState) {
   for (const p of living(s)) for (const t of tasksOf(s, p)) finish(s, p, t);

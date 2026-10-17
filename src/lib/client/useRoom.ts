@@ -253,8 +253,10 @@ export function useRoom(code: string) {
   }, [code]);
 
   const clearError = useCallback(() => setError(null), []);
+  /** Asks for the current state now instead of at the next poll. */
+  const reload = useCallback(() => refresh.current(), []);
 
-  return { room, error, clearError, busy, send, join, leave, rejoin, cancelRejoin };
+  return { room, error, clearError, busy, send, join, leave, rejoin, cancelRejoin, reload };
 }
 
 export type RoomApi = ReturnType<typeof useRoom>;

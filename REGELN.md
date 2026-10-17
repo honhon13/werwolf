@@ -112,11 +112,11 @@ Fuchs, Bärenführer und Ritter (Digitalregel).
 4. **Morgen** – wer ausgeschieden ist, wird mit Rolle genannt.
 5. Ggf. Schuss des Jägers, Nachfolge des Hauptmanns.
 6. Nur am ersten Tag und nur wenn eingeschaltet: **Hauptmannwahl**.
-7. **Diskussion** mit Zeitlimit (Standard 3 Minuten, einstellbar 30 s bis
-   15 min oder ohne Limit). Sie endet, wenn die Zeit um ist oder alle
-   Lebenden „Fertig“ tippen (Digitalregel).
-8. **Abstimmung** (siehe 5), dann das Urteil.
-9. Sieg prüfen, sonst wieder Nacht.
+7. **„Wer ist ein Werwolf?“** – Beraten und Abstimmen in einer Phase
+   (Digitalregel, siehe 5). Sie dauert so lange, wie die Spielleitung in der
+   Lobby unter „Zeit zum Diskutieren“ eingestellt hat (Standard 3 Minuten).
+   Danach kommt das Urteil.
+8. Sieg prüfen, sonst wieder Nacht.
 
 Der Sieg wird nach jeder Nacht, jeder Abstimmung und jedem Schuss geprüft.
 
@@ -174,10 +174,19 @@ Jeder Tod löst sofort seine Folgen aus (siehe 6).
 
 - Abstimmen dürfen alle Lebenden, außer dem erkannten Dorfdepp und – am Tag
   nach dem Sündenbock – allen, die der Sündenbock nicht bestimmt hat.
-- Man darf sich **enthalten** (Hausregel), aber nicht für sich selbst
-  stimmen.
-- Die Stimmen sind geheim, bis **alle** abgestimmt haben; dann werden alle
-  Stimmen gleichzeitig gezeigt.
+- **Beraten und abstimmen gleichzeitig** (Digitalregel): Die Abstimmung
+  beginnt direkt nach dem Morgen und läuft so lange, wie die Spielleitung
+  als „Zeit zum Diskutieren“ eingestellt hat. Alle sehen denselben
+  Countdown. Bis die Zeit um ist, kann jeder seine Stimme abgeben und
+  **ändern**; ausgezählt wird erst danach – auch wenn alle schon früher
+  abgestimmt haben. Ist „Ohne“ Zeitlimit eingestellt, wird ausgezählt,
+  sobald alle abgestimmt haben.
+- Jede Stimme geht an einen **anderen lebenden Spieler**; enthalten oder für
+  sich selbst stimmen geht nicht.
+- Wer bei Ablauf nicht abgestimmt hat, bekommt **zufällig einen Mitspieler**,
+  für den er hätte stimmen dürfen.
+- Die Stimmen sind geheim, bis ausgezählt wird; dann werden alle Stimmen
+  gleichzeitig gezeigt. Wer schon abgestimmt hat, sieht jeder.
 - Die Stimme des **Hauptmanns zählt doppelt** (Grundspiel).
 - Ein vom **Raben** Markierter hat zwei Stimmen mehr gegen sich, nur in der
   ersten Runde dieser Abstimmung (Charaktere).
@@ -186,7 +195,8 @@ Jeder Tod löst sofort seine Folgen aus (siehe 6).
   1. Lebt der **Sündenbock**, scheidet er aus (Neumond) und bestimmt, wer am
      nächsten Tag abstimmen darf.
   2. Sonst gibt es **eine Stichwahl** nur zwischen den Gleichplatzierten
-     (Hausregel).
+     (Hausregel). Sie hat 20 Sekunden und dieselben Regeln: Stimmen lassen
+     sich bis zum Ende ändern, fehlende werden zufällig vergeben.
   3. Steht es wieder gleich, scheidet **niemand** aus (Hausregel).
 - Hat niemand eine Stimme bekommen, scheidet niemand aus.
 - Trifft das Urteil den **Dorfdepp**, bleibt er im Spiel, verliert aber
@@ -270,7 +280,7 @@ Abstimmung übersteht.
 | Rabe | Charaktere | markiert jede Nacht einen Spieler (darf auslassen), siehe 5 |
 | Ritter mit der rostigen Klinge | Charaktere | siehe 6 |
 | Engel | Charaktere | siehe 3 und 6; danach normaler Dorfbewohner |
-| Schauspieler | Charaktere, **Digitalregel** | bekommt drei Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe und benutzt jede Nacht höchstens eine, jede nur einmal; seine Schutz-Nacht zählt nicht für „nie zweimal denselben“, ein Fuchs-Fehlschlag kostet nichts |
+| Schauspieler | Charaktere, **Digitalregel** | bekommt vier Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe und benutzt jede Nacht höchstens eine, jede nur einmal; seine Schutz-Nacht zählt nicht für „nie zweimal denselben“, ein Fuchs-Fehlschlag kostet nichts |
 
 Alle Dorfrollen mit Fähigkeit verlieren sie, wenn das Dorf den Ältesten
 getötet hat. Wer infiziert wird, behält seine Fähigkeit, gewinnt aber mit dem
@@ -307,6 +317,42 @@ Jeder kann jederzeit über das Menü gehen.
 - **Nach Spielende:** Man bleibt in der Übersicht und behält einen Sieg.
 
 ## 10. Damit das Spiel nicht hängen bleibt
+
+### Zeitlimits (Digitalregel)
+
+- **Zeitlimit:** Jeder Schritt der Nacht, die Stichwahl, die Hauptmannwahl
+  und jede Wahl, die einer für alle trifft (Schuss des Jägers, neuer
+  Hauptmann, Wahl des Sündenbocks), hat **20 Sekunden**. Die Abstimmung des
+  Tages dauert so lange wie die eingestellte „Zeit zum Diskutieren“ (siehe
+  5). Alle Handys zeigen denselben Countdown, gezählt nach der Uhr des
+  Servers.
+- **Früher fertig:** Haben alle entschieden, geht es sofort weiter – außer
+  bei der Verbannung und ihrer Stichwahl, die bis zum Ende der Zeit offen
+  bleiben, damit jeder seine Stimme noch ändern kann.
+- **Getroffene Entscheidungen** gelten und lassen sich nicht ändern. Ausnahmen:
+  Die Wölfe dürfen ihre Wahl ändern, bis sie sich einig sind, und bei der
+  Verbannung darf jeder bis zum Ende der Zeit umentscheiden.
+- **Nach Ablauf** entscheidet das Spiel für alle, die noch nichts getan haben:
+  - Wo eine Wahl **Pflicht** ist, wählt es zufällig unter den erlaubten
+    Möglichkeiten: Seherin, Beschützer, Fuchs, Amor, Wildes Kind,
+    Wolfshund, Dieb (bei zwei Wolfskarten nur eine davon), Flötenspieler,
+    Großer böser Wolf, das Opfer der Wölfe, der Schuss des Jägers, der
+    neue Hauptmann und die Stimme bei der Verbannung (siehe 5).
+  - Wo man **verzichten** darf, verzichtet es: Bei der Hauptmannwahl gilt
+    das als Enthaltung. Hexe, Rabe, Schauspieler, Urwolf, Weißer Werwolf und
+    Kleines Mädchen nutzen ihre Fähigkeit nicht, und der Sündenbock lässt
+    alle abstimmen. So verschwendet der Zufall keinen Trank.
+  - Tarnaufgaben werden einfach abgeschlossen.
+  - Wölfe, die sich nicht einig wurden, greifen das am häufigsten gewählte
+    Opfer an; wer gar nicht gewählt hat, bekommt vorher eine zufällige Wahl.
+- **Kulanz:** Eine Eingabe, die kurz vor Ablauf abgeschickt wurde, zählt
+  noch, wenn sie bis eine Sekunde nach Ablauf ankommt. Was später kommt,
+  wird mit „Zu spät“ abgelehnt.
+- **Wer wertet aus:** Die erste Anfrage irgendeines Geräts nach Ablauf
+  wertet aus, und zwar genau einmal. Sind alle Handys gesperrt oder offline,
+  holt das Spiel die Auswertung nach, sobald ein Gerät wieder da ist.
+
+### Weitere Hilfen
 
 - **Überspringen** (nur Spielleitung, Digitalregel): beendet die aktuelle
   Phase mit dem, was eingegeben wurde. Fehlende Stimmen zählen als

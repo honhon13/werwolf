@@ -329,22 +329,20 @@ export function DiscussionPhase({ view, api, clockOffset }: PhaseProps & { clock
 
 export function VotePhase({ view, api }: PhaseProps) {
   const [picked, setPicked] = useState<string | null>(null);
-  const [changing, setChanging] = useState(false);
   const vote = view.vote;
   if (!vote) return null;
 
   const election = vote.kind === "election";
   const runoff = vote.round === 2;
+  const timed = view.deadline !== null;
   const alive = view.players.filter((p) => p.alive);
-  const voted = vote.myBallot !== undefined && !changing;
+  const mine = vote.myBallot;
+  const voted = mine !== undefined;
   const choices = alive.filter(
     (p) => (election || p.id !== view.me.id) && (!vote.candidates || vote.candidates.includes(p.id)),
   );
   const cast = async (target: string | null) => {
-    if (await api.send({ type: "vote", target })) {
-      setPicked(null);
-      setChanging(false);
-    }
+    if (await api.send({ type: "vote", target })) setPicked(null);
   };
   const tick = (p: { id: string; done: boolean }) => p.done && <span className="text-xl text-good">✓</span>;
 
@@ -353,12 +351,15 @@ export function VotePhase({ view, api }: PhaseProps) {
     : election
       ? "Wer soll euer Hauptmann sein? Seine Stimme zählt bei jeder Abstimmung doppelt."
       : view.short
-        ? "Wer ist der Werwolf? Das ist eure einzige Abstimmung."
-        : "Wer soll das Dorf verlassen? Alle stimmen gleichzeitig ab.";
+        ? "Besprecht euch und stimmt ab. Das ist eure einzige Abstimmung."
+        : "Besprecht euch und stimmt ab: Wer soll das Dorf verlassen?";
+  const counted = timed
+    ? "Bis die Zeit um ist, kannst du deine Stimme noch ändern. Dann wird ausgezählt."
+    : "Ausgezählt wird, sobald alle abgestimmt haben. Bis dahin kannst du deine Stimme noch ändern.";
 
   return (
     <>
-      <Title sub={sub}>{election ? "Hauptmannwahl" : runoff ? "Stichwahl" : "Abstimmung"}</Title>
+      <Title sub={sub}>{election ? "Hauptmannwahl" : runoff ? "Stichwahl" : "Wer ist ein Werwolf?"}</Title>
 
       {runoff && vote.previous && <Ballots view={view} ballots={vote.previous} />}
       {vote.marked.length > 0 && (
@@ -383,21 +384,18 @@ export function VotePhase({ view, api }: PhaseProps) {
                 : "Der Sündenbock hat bestimmt, dass du heute nicht abstimmen darfst."}
           </Waiting>
         </>
-      ) : voted ? (
+      ) : election && voted ? (
         <>
           <Card className="rise text-center">
             <p className="text-ink-soft">Deine Stimme</p>
-            <p className="text-2xl font-extrabold">{vote.myBallot ? nameOf(view, vote.myBallot) : "Enthaltung"}</p>
+            <p className="text-2xl font-extrabold">{mine ? nameOf(view, mine) : "Enthaltung"}</p>
           </Card>
           <PlayerGrid players={alive} meId={view.me.id} badge={tick} />
-          <div className="mt-auto space-y-3">
+          <div className="mt-auto">
             <Waiting progress={view.progress}>Das Ergebnis kommt, wenn alle abgestimmt haben.</Waiting>
-            <Button variant="quiet" onClick={() => setChanging(true)}>
-              Stimme ändern
-            </Button>
           </div>
         </>
-      ) : (
+      ) : election ? (
         <>
           <PlayerGrid players={choices} meId={view.me.id} selected={picked ? [picked] : []} onPick={setPicked} />
           <div className="mt-auto space-y-2.5">
@@ -407,6 +405,26 @@ export function VotePhase({ view, api }: PhaseProps) {
             <Button variant="quiet" disabled={api.busy} onClick={() => cast(null)}>
               Enthalten
             </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <PlayerGrid
+            players={choices}
+            meId={view.me.id}
+            selected={[picked ?? mine ?? ""].filter(Boolean)}
+            onPick={setPicked}
+            badge={tick}
+          />
+          <div className="mt-auto space-y-2.5">
+            {voted && (picked === null || picked === mine) ? (
+              <p className="rise text-center text-lg font-extrabold">✓ Deine Stimme: {nameOf(view, mine)}</p>
+            ) : (
+              <Button disabled={!picked || api.busy} onClick={() => cast(picked)}>
+                {voted ? "Stimme ändern" : "Stimme abgeben"}
+              </Button>
+            )}
+            <Waiting progress={view.progress}>{counted}</Waiting>
           </div>
         </>
       )}

@@ -37,8 +37,8 @@ also nach und nach aufnehmen, das Spiel funktioniert die ganze Zeit.
 | 6 | `06-morgen-opfer` | es Morgen wird und jemand ausgeschieden ist |
 | 7 | `07-jaeger` | der Jäger ausgeschieden ist und noch schießen darf |
 | 8 | `08-jaeger-schuss` | der Jäger geschossen hat |
-| 9 | `09-diskussion` | die Beratung am Tag beginnt |
-| 10 | `10-abstimmung` | die Abstimmung beginnt |
+| 9 | `09-diskussion` | der Tag beginnt: Beraten und Abstimmen laufen gleichzeitig |
+| 10 | `10-abstimmung` | zurzeit nicht – Beratung und Abstimmung sind zu einer Phase zusammengelegt |
 | 11 | `11-stichwahl` | es Gleichstand gibt und noch einmal gewählt wird – bei der Abstimmung und bei der Hauptmannwahl |
 | 12 | `12-urteil-verbannt` | nach der Abstimmung jemand gehen muss (auch der Sündenbock) |
 | 13 | `13-urteil-niemand` | nach der Abstimmung niemand gehen muss |

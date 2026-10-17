@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addPlayer, applyAction, GameError, newGame } from "./engine";
-import { autoRoles, countsOf, MAX_PLAYERS, problem, ROLE_ORDER, ROLES } from "./roles";
+import { addPlayer, applyAction, expireIfDue, GameError, newGame } from "./engine";
+import { autoRoles, countsOf, GRACE_MS, MAX_PLAYERS, problem, ROLE_ORDER, ROLES } from "./roles";
 import { find, inPack, teamOf } from "./state";
 import { seeded } from "./test-helpers";
 import type { Action, GameState, RoleId, Task, View } from "./types";
@@ -47,14 +47,17 @@ function move(v: View, rng: () => number): Action | null {
     }
     case "vote":
     case "election": {
-      if (!v.me.canVote || v.vote!.myBallot !== undefined) return null;
+      const verdict = v.vote!.kind === "lynch";
+      // A verdict vote may change until the time is up; now and then somebody does.
+      if (!v.me.canVote || (v.vote!.myBallot !== undefined && !(verdict && rng() < 0.1))) return null;
       const allowed = v.players.filter(
         (p) =>
           p.alive &&
           (v.vote!.kind === "election" || p.id !== v.me.id) &&
           (!v.vote!.candidates || v.vote!.candidates.includes(p.id)),
       );
-      return { type: "vote", target: rng() < 0.1 || allowed.length === 0 ? null : pick(allowed, rng).id };
+      const abstain = !verdict && rng() < 0.1;
+      return { type: "vote", target: abstain || allowed.length === 0 ? null : pick(allowed, rng).id };
     }
     case "hunter":
     case "succession":
@@ -122,7 +125,7 @@ function checkPrivacy(s: GameState, viewer: string) {
 /** How often the host had to skip a step, across the games played so far. */
 let forced = 0;
 
-function play(n: number, seed: number, manual: boolean, leaveChance = 0) {
+function play(n: number, seed: number, manual: boolean, leaveChance = 0, expireChance = 0) {
   const rng = seeded(seed);
   let s = newGame("FUZZ", 0);
   for (let i = 0; i < n; i++) s = addPlayer(s, { id: `p${i}`, name: `S${i}`, tokenHash: `t${i}` });
@@ -160,9 +163,19 @@ function play(n: number, seed: number, manual: boolean, leaveChance = 0) {
         if (!(e instanceof GameError)) throw e;
       }
     }
+    if (expireChance > 0 && s.deadline !== null && rng() < expireChance) {
+      // The time runs out, whatever has been decided so far.
+      s = expireIfDue(s, { now: s.deadline + GRACE_MS, rng });
+      moved = true;
+    }
     if (leaveChance > 0 && s.phase !== "ended" && rng() < leaveChance) {
       // Somebody walks off, at any moment, the host included.
       s = applyAction(s, pick(s.players.filter((p) => !p.left), rng).id, { type: "leave" }, ctx);
+      moved = true;
+    }
+    if (!moved && s.deadline !== null) {
+      // Nobody does anything more: the time runs out.
+      s = expireIfDue(s, { now: s.deadline + GRACE_MS, rng });
       moved = true;
     }
     if (!moved) {
@@ -212,6 +225,17 @@ describe("random games", () => {
     }
     expect(leavers).toBeGreaterThan(100);
     // Nobody ever has to wait for somebody who left.
+    expect(forced).toBe(0);
+  });
+
+  it("go on when time runs out at any moment, whatever was decided", { timeout: 240_000 }, () => {
+    forced = 0;
+    for (let n = 3; n <= MAX_PLAYERS; n++) {
+      for (let seed = 0; seed < 8; seed++) {
+        const s = play(n, n * 7000 + seed, seed % 2 === 1, seed % 4 === 0 ? 0.02 : 0, 0.15);
+        expect(s.winner).not.toBeNull();
+      }
+    }
     expect(forced).toBe(0);
   });
 

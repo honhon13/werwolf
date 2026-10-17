@@ -1,4 +1,4 @@
-import { transferHost } from "@/lib/game/engine";
+import { expireIfDue, isOverdue, transferHost } from "@/lib/game/engine";
 import {
   credentialsFrom,
   type GuestResponse,
@@ -10,6 +10,7 @@ import {
   normalizeCode,
   nowSeconds,
   onlineIds,
+  rng,
 } from "@/lib/server/api";
 import { getStore, mutate, RoomNotFound, type Room } from "@/lib/server/store";
 
@@ -32,6 +33,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/rooms/[code]
     const now = nowSeconds();
     let room = await getStore().read(code, creds ? { ...creds, now } : undefined);
     if (!room) throw new RoomNotFound();
+    // Time is kept by the server: the first request after a deadline settles it for everybody.
+    if (isOverdue(room.state, Date.now())) {
+      room = await mutate(code, (current) => expireIfDue(current.state, { now: Date.now(), rng }));
+    }
 
     const me = member(room.state, creds);
     if (!me) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addPlayer, applyAction, newGame, requestRejoin } from "./engine";
-import { ackAll, act, alive, ctx, fails, game, night, see, tasks, toVote, votes } from "./test-helpers";
+import { ackAll, act, alive, ctx, fails, game, night, see, tasks, timeUp, toVote, votes } from "./test-helpers";
 
 const D = "dorfbewohner" as const;
 
@@ -59,7 +59,7 @@ describe("night steps", () => {
 });
 
 describe("day", () => {
-  it("reveals ballots only once everybody has voted", () => {
+  it("reveals ballots only when the time is up and they are counted", () => {
     let s = game(["werwolf", D, D, D, D]);
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = toVote(s);
@@ -67,7 +67,12 @@ describe("day", () => {
     const view = see(s, "p2").vote!;
     expect(view.voted.sort()).toEqual(["p0", "p1"]);
     expect(JSON.stringify(see(s, "p2"))).not.toContain('"p0":"p1"');
-    s = votes(s, { p2: "p0", p3: "p0" });
+    s = act(s, "p2", { type: "vote", target: "p0" });
+    s = act(s, "p3", { type: "vote", target: "p0" });
+    // Everybody has voted, but the votes may still change until the time is up.
+    expect(s.phase).toBe("vote");
+    expect(JSON.stringify(see(s, "p2"))).not.toContain('"p0":"p1"');
+    s = timeUp(s);
     expect(s.announce!.ballots).toEqual({ p0: "p1", p1: "p0", p2: "p0", p3: "p0" });
   });
 
@@ -130,7 +135,7 @@ describe("four players", () => {
         s = night(s, "p0", "wolf", { targets: [victim] });
         expect(s.announce!.deaths.length).toBeLessThanOrEqual(1);
         s = ackAll(s);
-        expect(s.phase).toBe("discussion");
+        expect(s.phase).toBe("vote");
       }
     }
   });
@@ -188,13 +193,13 @@ describe("who the game waits for", () => {
     expect(see(s, "p2").progress).toMatchObject({ done: 1, total: 5, waiting: null });
   });
 
-  it("names who has not confirmed the morning or the discussion", () => {
+  it("names who has not confirmed the morning or not yet voted", () => {
     let s = game(["werwolf", "seherin", D, D, D]);
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = night(s, "p1", "seherin", { targets: ["p0"] });
     expect(waiting(s)).toEqual(["P0", "P1", "P2", "P3"]);
     s = ackAll(s);
-    s = act(s, "p1", { type: "ack" });
+    s = act(s, "p1", { type: "vote", target: "p0" });
     expect(waiting(s, "p4")).toEqual(["P0", "P2", "P3"]);
   });
 
@@ -204,7 +209,7 @@ describe("who the game waits for", () => {
     s = toVote(s);
     s = votes(s, { p0: "p1", p2: "p1", p3: "p1", p4: "p1" });
     expect(waiting(s)).toEqual(["P1"]);
-    s = votes(s, { p1: "p0" });
+    s = timeUp(act(s, "p1", { type: "vote", target: "p0" }));
     s = ackAll(ackAll(s));
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = toVote(s);

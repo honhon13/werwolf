@@ -75,7 +75,7 @@ export function narration(view: View): string {
     case "vote":
       return view.vote?.round === 2
         ? "Gleichstand! Es gibt eine Stichwahl."
-        : "Stimmt jetzt ab: Wer soll das Dorf verlassen?";
+        : "Wer von euch ist ein Werwolf? Besprecht euch und stimmt ab, bevor die Zeit um ist!";
     case "ended":
       switch (view.ended?.winner) {
         case "dorf":

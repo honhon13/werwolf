@@ -178,7 +178,7 @@ describe("Ältester", () => {
     s = night(s, "p0", "wolf", { targets: ["p3"] });
     expect(s.announce!.deaths).toEqual([{ id: "p3", cause: "wolf" }]);
     s = ackAll(s);
-    expect(s.phase).toBe("discussion");
+    expect(s.phase).toBe("vote");
   });
 });
 
@@ -413,9 +413,8 @@ describe("Ritter mit der rostigen Klinge", () => {
 describe("Engel", () => {
   it("opens with a day and wins when the first vote takes him", () => {
     let s = game(["werwolf", "engel", D, D, D]);
-    expect(s.phase).toBe("discussion");
+    expect(s.phase).toBe("vote");
     expect(s.round).toBe(0);
-    s = ackAll(s);
     s = votes(s, { p0: "p1", p1: "p0", p2: "p1", p3: "p1", p4: "p1" });
     s = ackAll(s);
     expect(s.winner).toBe("engel");
@@ -489,6 +488,6 @@ describe("Hauptmann", () => {
     s = act(s, "p2", { type: "choose", targets: ["p3"] });
     expect(s.captain).toBe("p3");
     s = ackAll(s);
-    expect(s.phase).toBe("discussion");
+    expect(s.phase).toBe("vote");
   });
 });

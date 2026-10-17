@@ -160,6 +160,8 @@ export async function mutate(
     const room = await db.read(code);
     if (!room) throw new RoomNotFound();
     const next = change(room);
+    // Nothing changed, e.g. a deadline somebody else already dealt with.
+    if (next === room.state) return room;
     if (await db.write(code, room.version, next)) {
       return { state: next, version: room.version + 1, seen: room.seen };
     }
