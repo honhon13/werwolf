@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addPlayer, applyAction, newGame, requestRejoin } from "./engine";
-import { ackAll, act, alive, ctx, fails, game, night, see, tasks, timeUp, toVote, votes } from "./test-helpers";
+import { ackAll, act, alive, ctx, fails, game, night, see, tasks, toVote, votes } from "./test-helpers";
 
 const D = "dorfbewohner" as const;
 
@@ -59,7 +59,7 @@ describe("night steps", () => {
 });
 
 describe("day", () => {
-  it("reveals ballots only when the time is up and they are counted", () => {
+  it("reveals ballots only once everybody has voted", () => {
     let s = game(["werwolf", D, D, D, D]);
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = toVote(s);
@@ -68,11 +68,8 @@ describe("day", () => {
     expect(view.voted.sort()).toEqual(["p0", "p1"]);
     expect(JSON.stringify(see(s, "p2"))).not.toContain('"p0":"p1"');
     s = act(s, "p2", { type: "vote", target: "p0" });
-    s = act(s, "p3", { type: "vote", target: "p0" });
-    // Everybody has voted, but the votes may still change until the time is up.
-    expect(s.phase).toBe("vote");
     expect(JSON.stringify(see(s, "p2"))).not.toContain('"p0":"p1"');
-    s = timeUp(s);
+    s = act(s, "p3", { type: "vote", target: "p0" });
     expect(s.announce!.ballots).toEqual({ p0: "p1", p1: "p0", p2: "p0", p3: "p0" });
   });
 
@@ -209,7 +206,7 @@ describe("who the game waits for", () => {
     s = toVote(s);
     s = votes(s, { p0: "p1", p2: "p1", p3: "p1", p4: "p1" });
     expect(waiting(s)).toEqual(["P1"]);
-    s = timeUp(act(s, "p1", { type: "vote", target: "p0" }));
+    s = act(s, "p1", { type: "vote", target: "p0" });
     s = ackAll(ackAll(s));
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = toVote(s);

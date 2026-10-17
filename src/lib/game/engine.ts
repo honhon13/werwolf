@@ -16,13 +16,15 @@ import {
 import {
   ACTOR_POWERS,
   autoRoles,
+  cards,
+  cardsNeeded,
   composition,
   countsOf,
   deal,
   DECISION_MS,
+  fits,
   GRACE_MS,
   MAX_PLAYERS,
-  MIN_PLAYERS,
   modeFor,
   ROLE_ORDER,
   ROLES,
@@ -339,8 +341,8 @@ function startDay(s: GameState, ctx: Ctx) {
 
 /**
  * The day: the village talks and votes at once, for as long as the host set
- * ("Zeit zum Diskutieren"). Votes may change until the time is up. Without a
- * time limit, the votes are counted as soon as everybody has voted.
+ * ("Zeit zum Diskutieren"). Votes may change until everybody has voted;
+ * then they are counted at once, or when the time is up at the latest.
  * Rooms saved during a separate discussion phase also end up here.
  */
 function startVote(s: GameState, ctx: Ctx) {
@@ -356,10 +358,9 @@ function startVote(s: GameState, ctx: Ctx) {
   }
 }
 
-/** Counts once everybody has voted; a verdict with a time limit only when `final`. */
-function countVotes(s: GameState, ctx: Ctx, final = false) {
+/** Counts as soon as everybody who may vote has voted, even while time is left. */
+function countVotes(s: GameState, ctx: Ctx) {
   if (!voters(s).every((p) => p.id in s.vote.ballots)) return;
-  if (!final && s.vote.kind === "lynch" && s.deadline !== null) return;
   const election = s.vote.kind === "election";
   const result = election ? tallyElection(s, ctx) : tallyVerdict(s);
   if (result) announce(s, result, election ? "discussion" : "night");
@@ -396,7 +397,7 @@ function expire(s: GameState, ctx: Ctx) {
         const valid = s.vote.kind === "lynch" ? living(s).filter((t) => mayVoteFor(s, p, t)) : [];
         s.vote.ballots[p.id] = valid.length > 0 ? pick(valid).id : null;
       }
-      return countVotes(s, ctx, true);
+      return countVotes(s, ctx);
     case "hunter":
     case "succession":
     case "scapegoat": {
@@ -564,7 +565,7 @@ function force(s: GameState, ctx: Ctx) {
     case "election":
     case "vote":
       for (const p of voters(s)) if (!(p.id in s.vote.ballots)) s.vote.ballots[p.id] = null;
-      return countVotes(s, ctx, true);
+      return countVotes(s, ctx);
     default:
       throw new GameError("Hier gibt es nichts zu überspringen.");
   }
@@ -575,7 +576,8 @@ function changeSettings(s: GameState, input: Partial<Settings>) {
   if (typeof auto === "boolean") {
     s.settings.auto = auto;
     if (!auto && !counts && Object.keys(s.settings.counts).length === 0) {
-      s.settings.counts = countsOf(autoRoles(Math.max(MIN_PLAYERS, s.players.length)));
+      // Start from the suggestion, with exactly as many cards as players.
+      s.settings.counts = countsOf(autoRoles(s.players.length));
     }
   }
   if (typeof captain === "boolean") s.settings.captain = captain;
@@ -587,13 +589,19 @@ function changeSettings(s: GameState, input: Partial<Settings>) {
   }
   // The page always sends the whole choice, so it replaces the old one.
   if (counts && typeof counts === "object") {
-    s.settings.counts = {};
+    const next: Settings["counts"] = {};
     for (const role of ROLE_ORDER) {
       const n = counts[role];
-      if (typeof n === "number" && Number.isFinite(n) && n > 0) {
-        s.settings.counts[role] = Math.min(MAX_PLAYERS + 2, Math.round(n));
-      }
+      if (typeof n === "number" && Number.isFinite(n) && n > 0) next[role] = Math.min(MAX_PLAYERS + 2, Math.round(n));
     }
+    const chosen = cards(next);
+    // An empty choice starts over; any other needs a Werwolf.
+    if (chosen.length > 0 && !chosen.includes("werwolf")) throw new GameError("Mindestens ein Werwolf muss dabei sein.");
+    if (!fits(s.players.length, cards(s.settings.counts), chosen)) {
+      const places = cardsNeeded(s.players.length, chosen);
+      throw new GameError(`Es gibt nur ${places} ${places === 1 ? "Platz" : "Plätze"} für Rollen – nimm erst eine andere Rolle heraus.`);
+    }
+    s.settings.counts = next;
   }
 }
 

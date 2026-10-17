@@ -381,7 +381,6 @@ export interface View {
     /** Cards needed: the number of players, plus two with the Dieb. */
     needed: number;
     chosen: number;
-    max: number;
   };
   /** Roles in this game (known to everybody, like the open card set). */
   inPlay: RoleId[];

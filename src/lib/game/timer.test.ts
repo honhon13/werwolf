@@ -125,27 +125,18 @@ describe("the day: talking and voting at once", () => {
     }
   });
 
-  it("lets votes change until the time is up and then locks them", () => {
+  it("lets votes change until everybody has voted, and nothing after the time is up", () => {
     let s = toVote(morning(180));
     s = act(s, "p1", { type: "vote", target: "p2" });
     s = act(s, "p1", { type: "vote", target: "p0" });
-    for (const voter of ["p0", "p2", "p3", "p4"]) s = act(s, voter, { type: "vote", target: voter === "p0" ? "p1" : "p0" });
+    for (const voter of ["p0", "p2", "p3"]) s = act(s, voter, { type: "vote", target: voter === "p0" ? "p1" : "p0" });
     s = act(s, "p0", { type: "vote", target: "p3" });
-    expect(s.vote.ballots).toEqual({ p0: "p3", p1: "p0", p2: "p0", p3: "p0", p4: "p0" });
+    expect(s.vote.ballots).toEqual({ p0: "p3", p1: "p0", p2: "p0", p3: "p0" });
     fails(() => at(s, "p1", { type: "vote", target: "p3" }, s.deadline! + GRACE_MS), /Zu spät/);
-    s = timeUp(s);
+    // The last vote ends the phase at once; nothing can change any more.
+    s = act(s, "p4", { type: "vote", target: "p0" });
     expect(s.announce?.ballots).toEqual({ p0: "p3", p1: "p0", p2: "p0", p3: "p0", p4: "p0" });
-  });
-
-  it("counts only when the time is up, even if everybody has voted", () => {
-    let s = toVote(morning(120));
-    for (const [voter, target] of [["p0", "p1"], ["p1", "p0"], ["p2", "p0"], ["p3", "p0"], ["p4", "p0"]]) {
-      s = act(s, voter, { type: "vote", target });
-    }
-    expect(s.phase).toBe("vote");
-    expect(expireIfDue(s, ctx(undefined, s.deadline! + GRACE_MS - 1))).toBe(s);
-    s = timeUp(s);
-    expect(s.announce?.deaths).toEqual([{ id: "p0", cause: "vote" }]);
+    fails(() => act(s, "p0", { type: "vote", target: "p1" }), /geht gerade nicht/);
   });
 
   it("gives whoever did not vote a random player they could have chosen", () => {
@@ -193,8 +184,8 @@ describe("the day: talking and voting at once", () => {
     for (const [voter, target] of [["p0", "p2"], ["p1", "p3"], ["p2", "p3"], ["p3", "p2"], ["p4", "p0"]]) {
       s = act(s, voter, { type: "vote", target });
     }
-    s = timeUp(s);
-    const started = 1000 + 180_000 + GRACE_MS;
+    // Everybody voted, so the tie is counted at once and the runoff starts.
+    const started = 1000;
     expect(s.vote).toMatchObject({ round: 2, candidates: ["p2", "p3"] });
     expect(s.deadline).toBe(started + DECISION_MS);
     fails(() => at(s, "p0", { type: "vote", target: "p0" }, started + 10), /nicht stimmen/);
@@ -227,6 +218,100 @@ describe("the day: talking and voting at once", () => {
     const once = timeUp(s);
     expect(expireIfDue(once, ctx(seeded(9), 1000 + 180_000 + GRACE_MS))).toBe(once);
     expect(at(once, "p2", { type: "tick" }, 1000 + 180_000 + GRACE_MS)).toMatchObject({ phase: once.phase, announce: once.announce });
+  });
+});
+
+describe("phases end as soon as everybody is done", () => {
+  /** The old deadline running out later must not change anything any more. */
+  const settled = (s: GameState, oldDeadline: number) => {
+    expect(expireIfDue(s, ctx(seeded(4), oldDeadline + GRACE_MS))).toBe(s);
+    expect(at(s, "p0", { type: "tick" }, oldDeadline + GRACE_MS)).toMatchObject({ phase: s.phase, deadline: s.deadline, round: s.round });
+  };
+
+  it("in every night step, waiting only for those who have something to do", () => {
+    // Without decoys only the role holders act; the villagers are not waited for.
+    let s = game(["werwolf", "amor", "seherin", "hexe", D, D]);
+    expect(s.night.step).toBe("erwachen");
+    let deadline = s.deadline!;
+    s = at(s, "p1", { type: "night", task: "amor", targets: ["p4", "p5"] }, 10_000);
+    expect(s.night.step).toBe("haupt");
+    settled(s, deadline);
+    deadline = s.deadline!;
+    s = at(s, "p0", { type: "night", task: "wolf", targets: ["p5"] }, 15_000);
+    s = at(s, "p2", { type: "night", task: "seherin", targets: ["p0"] }, 20_000);
+    expect(s.night.step).toBe("hexe");
+    settled(s, deadline);
+    deadline = s.deadline!;
+    s = at(s, "p3", { type: "night", task: "hexe" }, 25_000);
+    expect(s.phase).toBe("announce");
+    expect(s.deadline).toBeNull();
+    settled(s, deadline);
+  });
+
+  it("at night with decoys once everybody has tapped, and never for the dead", () => {
+    let s = game(["werwolf", "seherin", D, D, D], { decoy: true });
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = night(s, "p1", "seherin", { targets: ["p0"] });
+    for (const id of ["p2", "p3"]) s = night(s, id, "suspect", { targets: ["p0"] });
+    expect(s.phase).toBe("night");
+    s = night(s, "p4", "suspect", { targets: ["p0"] });
+    expect(s.phase).toBe("announce");
+    s = ackAll(s);
+    // p4 is dead now and has no task the next night.
+    s = ackAll(votes(s, { p0: "p1", p1: "p0", p2: "p0", p3: "p0" }));
+    expect(s.phase).toBe("ended");
+  });
+
+  it("in the Hauptmann election, the day's vote and its runoff", () => {
+    let s = game(["werwolf", "seherin", D, D, D, D], { captain: true });
+    s = night(s, "p0", "wolf", { targets: ["p5"] });
+    s = night(s, "p1", "seherin", { targets: ["p0"] });
+    s = ackAll(s);
+    let deadline = s.deadline!;
+    for (const id of ["p0", "p1", "p2", "p3", "p4"]) s = at(s, id, { type: "vote", target: "p2" }, 5_000);
+    expect(s).toMatchObject({ phase: "announce", deadline: null });
+    settled(s, deadline);
+    s = ackAll(s);
+    expect(s.phase).toBe("vote");
+    deadline = s.deadline!;
+    // p2 is Hauptmann: p0 gets three votes, p1 too – a tie, counted at once.
+    for (const [voter, target] of [["p0", "p1"], ["p1", "p0"], ["p2", "p0"], ["p3", "p1"], ["p4", "p1"]]) {
+      s = at(s, voter, { type: "vote", target }, 170_000);
+    }
+    expect(s.vote.round).toBe(2);
+    expect([...s.vote.candidates!].sort()).toEqual(["p0", "p1"]);
+    settled(s, deadline);
+    deadline = s.deadline!;
+    for (const [voter, target] of [["p0", "p1"], ["p1", "p0"], ["p2", "p0"], ["p3", "p0"], ["p4", "p0"]]) {
+      s = at(s, voter, { type: "vote", target }, 175_000);
+    }
+    expect(s.announce?.deaths).toEqual([{ id: "p0", cause: "vote" }]);
+    settled(s, deadline);
+  });
+
+  it("without waiting for the dead or the exposed Dorfdepp", () => {
+    let s = game(["werwolf", "idiot", "seherin", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p5"] });
+    s = night(s, "p2", "seherin", { targets: ["p0"] });
+    s = toVote(s);
+    s = votes(s, { p0: "p1", p1: "p0", p2: "p1", p3: "p1", p4: "p1" });
+    s = ackAll(s);
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = night(s, "p2", "seherin", { targets: ["p3"] });
+    s = toVote(s);
+    // Alive: p0, p1 (exposed, no vote), p2, p3. Three votes end the day.
+    for (const [voter, target] of [["p0", "p2"], ["p2", "p0"], ["p3", "p0"]]) s = act(s, voter, { type: "vote", target });
+    expect(s.announce?.deaths).toEqual([{ id: "p0", cause: "vote" }]);
+  });
+
+  it("in a last choice: the Jäger's shot, a new Hauptmann, the Sündenbock", () => {
+    let s = game(["werwolf", "jaeger", D, D, D]);
+    s = night(s, "p0", "wolf", { targets: ["p1"] });
+    s = ackAll(s);
+    const deadline = s.deadline!;
+    s = at(s, "p1", { type: "choose", targets: ["p2"] }, 5_000);
+    expect(s).toMatchObject({ phase: "announce", deadline: null });
+    settled(s, deadline);
   });
 });
 

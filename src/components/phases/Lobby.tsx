@@ -2,7 +2,7 @@
 
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import { CAPTAIN_TEXT, CATEGORY_NAMES, type Category, NOT_AVAILABLE, ROLE_ORDER, ROLES, SOURCE_NAMES } from "@/lib/game/roles";
+import { CAPTAIN_TEXT, cards, CATEGORY_NAMES, type Category, fits, NOT_AVAILABLE, ROLE_ORDER, ROLES, SOURCE_NAMES } from "@/lib/game/roles";
 import type { Action, RoleId, View } from "@/lib/game/types";
 import { Button, Card, cx, PlayerGrid, RoleChips } from "../ui";
 import type { PhaseProps } from "./shared";
@@ -155,7 +155,10 @@ function RoleEditor({ view, change }: { view: View; change: (c: Change) => void 
   const { setup } = view;
   const counts = setup.counts;
   const set = (role: RoleId, n: number) => change({ counts: { ...counts, [role]: Math.max(0, n) } });
-  const diff = setup.needed - setup.chosen;
+  // The same rule as on the server: never more cards than places.
+  const chosen = cards(counts);
+  const allowed = (role: RoleId, n: number) => fits(view.players.length, chosen, cards({ ...counts, [role]: n }));
+  const free = setup.needed - setup.chosen;
   const groups = (Object.keys(CATEGORY_NAMES) as Category[]).map((category) => ({
     category,
     roles: ROLE_ORDER.filter((r) => ROLES[r].category === category),
@@ -163,9 +166,19 @@ function RoleEditor({ view, change }: { view: View; change: (c: Change) => void 
 
   return (
     <div className="space-y-4">
-      <p className={cx("text-center font-extrabold", diff === 0 ? "text-good" : "text-accent")} role="status">
-        {setup.chosen} von {setup.needed} Karten gewählt
-        {diff > 0 ? ` – noch ${diff} ${diff === 1 ? "fehlt" : "fehlen"}` : diff < 0 ? ` – ${-diff} zu viel` : " ✓"}
+      <p
+        className={cx(
+          "sticky top-2 z-10 rounded-2xl border border-line bg-card-strong px-3 py-2 text-center font-extrabold backdrop-blur",
+          free === 0 ? "text-good" : free > 0 ? "text-accent" : "text-danger",
+        )}
+        role="status"
+      >
+        {setup.chosen} von {setup.needed} Plätzen belegt
+        {free > 0
+          ? ` · noch ${free} frei`
+          : free < 0
+            ? ` · ${-free} zu viel, bitte herausnehmen`
+            : " · alle belegt ✓"}
       </p>
       {(counts.dieb ?? 0) > 0 && (
         <p className="text-center text-sm text-ink-soft">Mit dem Dieb liegen zwei Karten mehr im Spiel, als es Spieler gibt.</p>
@@ -204,8 +217,9 @@ function RoleEditor({ view, change }: { view: View; change: (c: Change) => void 
                       aria-checked={n > 0}
                       aria-label={`${r.name} ${n > 0 ? "entfernen" : "hinzufügen"}`}
                       onClick={() => set(role, n > 0 ? 0 : 1)}
+                      disabled={!allowed(role, n > 0 ? 0 : 1)}
                       className={cx(
-                        "min-h-11 min-w-20 rounded-xl border px-3 text-sm font-extrabold",
+                        "min-h-11 min-w-20 rounded-xl border px-3 text-sm font-extrabold disabled:opacity-30",
                         n > 0 ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-soft",
                       )}
                     >
@@ -227,7 +241,7 @@ function RoleEditor({ view, change }: { view: View; change: (c: Change) => void 
                       <button
                         type="button"
                         aria-label={`Ein ${r.name} mehr`}
-                        disabled={n >= view.setup.max}
+                        disabled={!allowed(role, n + 1)}
                         onClick={() => set(role, n + 1)}
                         className="size-11 rounded-full border border-line text-2xl font-extrabold disabled:opacity-30"
                       >

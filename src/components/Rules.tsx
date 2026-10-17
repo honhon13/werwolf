@@ -4,13 +4,13 @@ const STEPS = [
   ["🎭", "Rolle ansehen", "Jeder bekommt heimlich eine Rolle. Zeig dein Handy niemandem!"],
   ["🌙", "Nacht", "Wer eine Fähigkeit hat, bekommt seine Aufgabe aufs Handy. Im Tarnmodus tippen alle etwas, damit am Tisch niemand auffällt."],
   ["🌅", "Morgen", "Die App verrät, wen es in der Nacht erwischt hat."],
-  ["💬", "Tag", "Ihr besprecht euch und stimmt gleichzeitig ab, wer das Dorf verlassen muss. Die Stimmen werden erst gezeigt, wenn die Zeit um ist."],
+  ["💬", "Tag", "Ihr besprecht euch und stimmt gleichzeitig ab, wer das Dorf verlassen muss. Die Stimmen werden erst gezeigt, wenn alle abgestimmt haben oder die Zeit um ist."],
   ["🔁", "Und wieder", "Dann wird es erneut Nacht – bis jemand gewonnen hat."],
 ];
 
 const RULES = [
   "Wer ausscheidet, zeigt seine Rolle, darf zuschauen und verrät nichts mehr.",
-  "Am Tag beratet ihr und stimmt gleichzeitig ab, so lange wie die eingestellte Zeit zum Diskutieren. Bis sie um ist, kann jeder seine Stimme ändern; wer nicht abstimmt, bekommt einen zufälligen Mitspieler. Bei Gleichstand wird der Sündenbock verbannt; ohne ihn gibt es eine Stichwahl, und steht es wieder gleich, muss niemand gehen.",
+  "Am Tag beratet ihr und stimmt gleichzeitig ab. Ausgezählt wird, sobald alle abgestimmt haben – spätestens, wenn die eingestellte Zeit zum Diskutieren um ist. Bis dahin kann jeder seine Stimme ändern; wer nicht abstimmt, bekommt einen zufälligen Mitspieler. Bei Gleichstand wird der Sündenbock verbannt; ohne ihn gibt es eine Stichwahl, und steht es wieder gleich, muss niemand gehen.",
   "Für jede andere Entscheidung habt ihr 20 Sekunden. Wer nichts tut: Eine Pflichtwahl trifft der Zufall, freiwillige Fähigkeiten bleiben ungenutzt, und bei der Hauptmannwahl zählt es als Enthaltung.",
   "Das Rudel gewinnt, sobald es mindestens so viele Wölfe gibt wie alle anderen zusammen. Das Dorf gewinnt, wenn kein Wolf, kein Weißer Werwolf und kein Flötenspieler mehr lebt.",
   "Sind die Verliebten aus verschiedenen Teams, gewinnen sie nur gemeinsam als die letzten beiden.",

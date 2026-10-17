@@ -139,7 +139,7 @@ function play(n: number, seed: number, manual: boolean, leaveChance = 0, expireC
         auto: !manual,
         captain: rng() < 0.5,
         decoy: rng() < 0.5,
-        counts: manual ? countsOf(randomRoles(n, rng)) : {},
+        ...(manual ? { counts: countsOf(randomRoles(n, rng)) } : {}),
       },
     },
     ctx,

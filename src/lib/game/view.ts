@@ -1,7 +1,7 @@
 import { voters } from "./day";
 import { ackers, openRejoins } from "./engine";
 import { attacked, enchantable, playerDone, prey, taskDone, tasksOf, wolfConsensus } from "./night";
-import { cards, cardsNeeded, composition, MAX_PLAYERS, modeFor, ROLE_ORDER, ROLES } from "./roles";
+import { cards, cardsNeeded, composition, modeFor, ROLE_ORDER, ROLES } from "./roles";
 import { find, inPack, living, neighbours, teamOf } from "./state";
 import type { GameState, Player, RoleId, Task, TaskId, View } from "./types";
 
@@ -244,7 +244,6 @@ export function viewFor(
       error: comp.error,
       needed: cardsNeeded(n, s.settings.auto ? [] : chosen),
       chosen: chosen.length,
-      max: MAX_PLAYERS,
     },
     inPlay,
     lovers: seesLovers ? s.lovers : null,

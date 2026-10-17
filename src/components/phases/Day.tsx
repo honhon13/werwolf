@@ -354,7 +354,7 @@ export function VotePhase({ view, api }: PhaseProps) {
         ? "Besprecht euch und stimmt ab. Das ist eure einzige Abstimmung."
         : "Besprecht euch und stimmt ab: Wer soll das Dorf verlassen?";
   const counted = timed
-    ? "Bis die Zeit um ist, kannst du deine Stimme noch ändern. Dann wird ausgezählt."
+    ? "Ausgezählt wird, sobald alle abgestimmt haben – spätestens, wenn die Zeit um ist. Bis dahin kannst du deine Stimme noch ändern."
     : "Ausgezählt wird, sobald alle abgestimmt haben. Bis dahin kannst du deine Stimme noch ändern.";
 
   return (

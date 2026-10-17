@@ -415,6 +415,18 @@ export function cardsNeeded(n: number, roles: RoleId[]): number {
   return roles.includes("dieb") ? n + 2 : n;
 }
 
+/**
+ * Whether the host may change the chosen cards from `before` to `after`
+ * with n players: never more cards than places (two more with the Dieb).
+ * When there are already too many – somebody left the lobby – taking cards
+ * away is always allowed, as long as it does not take places away too.
+ */
+export function fits(n: number, before: RoleId[], after: RoleId[]): boolean {
+  const places = cardsNeeded(n, after);
+  if (after.length <= places) return true;
+  return after.length < before.length && places >= cardsNeeded(n, before);
+}
+
 /** Why a set of cards cannot be played by n players, or null if it can. */
 export function problem(n: number, roles: RoleId[]): string | null {
   if (n < MIN_PLAYERS) return `Ihr braucht mindestens ${MIN_PLAYERS} Spieler.`;

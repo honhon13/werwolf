@@ -87,7 +87,17 @@ nur, wenn
 
 Sonst nennt die Lobby den Grund, und der Start-Knopf bleibt gesperrt. Der
 Server prüft das beim Start noch einmal. Wer auf „Selbst wählen“ wechselt,
-beginnt mit dem automatischen Vorschlag.
+beginnt mit dem automatischen Vorschlag für die Spieler, die gerade da sind.
+
+- Es lassen sich **nie mehr Rollen wählen, als es Plätze gibt** (mit Dieb
+  zwei mehr). Sind alle Plätze belegt, sind weitere Rollen gesperrt; der
+  Dieb bleibt wählbar, weil er zwei Plätze mitbringt. Die Lobby zeigt immer,
+  wie viele Plätze belegt und wie viele frei sind. Der Server lehnt jede
+  Auswahl ab, die mehr Rollen als Plätze oder keinen Werwolf hätte.
+- **Kommt oder geht jemand**, prüft die Lobby sofort neu: Sind dann zu viele
+  Rollen gewählt, steht dort „zu viel, bitte herausnehmen“, nur noch
+  Herausnehmen ist möglich, und der Start wartet. Gewählte Rollen werden
+  nie von selbst entfernt.
 
 ### Austeilen
 
@@ -177,10 +187,9 @@ Jeder Tod löst sofort seine Folgen aus (siehe 6).
 - **Beraten und abstimmen gleichzeitig** (Digitalregel): Die Abstimmung
   beginnt direkt nach dem Morgen und läuft so lange, wie die Spielleitung
   als „Zeit zum Diskutieren“ eingestellt hat. Alle sehen denselben
-  Countdown. Bis die Zeit um ist, kann jeder seine Stimme abgeben und
-  **ändern**; ausgezählt wird erst danach – auch wenn alle schon früher
-  abgestimmt haben. Ist „Ohne“ Zeitlimit eingestellt, wird ausgezählt,
-  sobald alle abgestimmt haben.
+  Countdown. Ausgezählt wird, **sobald alle abgestimmt haben** – spätestens,
+  wenn die Zeit um ist (bei „Ohne“ Zeitlimit nur Ersteres). Bis dahin kann
+  jeder seine Stimme **ändern**.
 - Jede Stimme geht an einen **anderen lebenden Spieler**; enthalten oder für
   sich selbst stimmen geht nicht.
 - Wer bei Ablauf nicht abgestimmt hat, bekommt **zufällig einen Mitspieler**,
@@ -196,7 +205,8 @@ Jeder Tod löst sofort seine Folgen aus (siehe 6).
      nächsten Tag abstimmen darf.
   2. Sonst gibt es **eine Stichwahl** nur zwischen den Gleichplatzierten
      (Hausregel). Sie hat 20 Sekunden und dieselben Regeln: Stimmen lassen
-     sich bis zum Ende ändern, fehlende werden zufällig vergeben.
+     sich ändern, bis alle abgestimmt haben, fehlende werden zufällig
+     vergeben.
   3. Steht es wieder gleich, scheidet **niemand** aus (Hausregel).
 - Hat niemand eine Stimme bekommen, scheidet niemand aus.
 - Trifft das Urteil den **Dorfdepp**, bleibt er im Spiel, verliert aber
@@ -326,12 +336,15 @@ Jeder kann jederzeit über das Menü gehen.
   Tages dauert so lange wie die eingestellte „Zeit zum Diskutieren“ (siehe
   5). Alle Handys zeigen denselben Countdown, gezählt nach der Uhr des
   Servers.
-- **Früher fertig:** Haben alle entschieden, geht es sofort weiter – außer
-  bei der Verbannung und ihrer Stichwahl, die bis zum Ende der Zeit offen
-  bleiben, damit jeder seine Stimme noch ändern kann.
+- **Früher fertig:** Haben alle entschieden, die in dieser Phase etwas tun
+  müssen, geht es in jeder Phase sofort weiter, für alle gleichzeitig. Der
+  Countdown läuft nur ab, solange noch jemand fehlt. Ausgeschiedene, der
+  erkannte Dorfdepp und Rollen ohne Aufgabe in diesem Schritt werden nicht
+  abgewartet; im Tarnmodus tippen nachts alle etwas, also wartet der
+  Schritt auf alle Lebenden.
 - **Getroffene Entscheidungen** gelten und lassen sich nicht ändern. Ausnahmen:
   Die Wölfe dürfen ihre Wahl ändern, bis sie sich einig sind, und bei der
-  Verbannung darf jeder bis zum Ende der Zeit umentscheiden.
+  Verbannung darf jeder umentscheiden, bis alle abgestimmt haben.
 - **Nach Ablauf** entscheidet das Spiel für alle, die noch nichts getan haben:
   - Wo eine Wahl **Pflicht** ist, wählt es zufällig unter den erlaubten
     Möglichkeiten: Seherin, Beschützer, Fuchs, Amor, Wildes Kind,

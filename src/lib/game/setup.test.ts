@@ -102,11 +102,55 @@ describe("manual roles", () => {
     expect(s.players.map((p) => p.role).sort()).toEqual(["dorfbewohner", "hexe", "werwolf"]);
   });
 
-  it("refuses to start an unplayable choice and says why", () => {
+  it("refuses a choice without a Werwolf, and to start one that does not add up", () => {
     let s = lobby(4);
-    s = applyAction(s, "p0", { type: "settings", settings: { auto: false, counts: { seherin: 1, dorfbewohner: 3 } } }, ctx());
-    expect(see(s, "p0").setup).toMatchObject({ roles: null, error: "Es braucht mindestens einen Werwolf." });
-    fails(() => applyAction(s, "p0", { type: "start" }, ctx()), /mindestens einen Werwolf/);
+    fails(() => applyAction(s, "p0", { type: "settings", settings: { auto: false, counts: { seherin: 1, dorfbewohner: 3 } } }, ctx()), /Mindestens ein Werwolf/);
+    s = applyAction(s, "p0", { type: "settings", settings: { auto: false, counts: { werwolf: 1, dorfbewohner: 2 } } }, ctx());
+    expect(see(s, "p0").setup).toMatchObject({ roles: null, chosen: 3, needed: 4, error: "Gewählt sind 3 Karten, gebraucht werden 4." });
+    fails(() => applyAction(s, "p0", { type: "start" }, ctx()), /gebraucht werden 4/);
+  });
+
+  it("never takes more cards than places, two more with the Dieb", () => {
+    const set = (s: GameState, counts: Partial<Record<RoleId, number>>) =>
+      applyAction(s, "p0", { type: "settings", settings: { auto: false, counts } }, ctx());
+    let s = set(lobby(5), { werwolf: 1, seherin: 1, dorfbewohner: 3 });
+    fails(() => set(s, { werwolf: 1, seherin: 1, dorfbewohner: 4 }), /nur 5 Plätze/);
+    fails(() => set(s, { werwolf: 1, seherin: 1, hexe: 1, dorfbewohner: 3 }), /nur 5 Plätze/);
+    // The Dieb brings two more places with him.
+    s = set(s, { werwolf: 1, seherin: 1, dieb: 1, dorfbewohner: 3 });
+    s = set(s, { werwolf: 1, seherin: 1, dieb: 1, dorfbewohner: 4 });
+    fails(() => set(s, { werwolf: 1, seherin: 1, dieb: 1, dorfbewohner: 5 }), /nur 7 Plätze/);
+    // Without him the cards would be too many again.
+    fails(() => set(s, { werwolf: 1, seherin: 1, dorfbewohner: 4 }), /nur 5 Plätze/);
+    expect(applyAction(s, "p0", { type: "start" }, ctx(seeded(2))).phase).toBe("roles");
+  });
+
+  it("starts with as many cards as players when switching to manual", () => {
+    for (const n of [1, 2, 3, 6]) {
+      const s = applyAction(lobby(n), "p0", { type: "settings", settings: { auto: false } }, ctx());
+      expect(cards(s.settings.counts)).toHaveLength(n);
+      expect(s.settings.counts.werwolf).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("checks the choice again whenever players come or go", () => {
+    let s = lobby(6);
+    s = applyAction(s, "p0", { type: "settings", settings: { auto: false } }, ctx());
+    expect(see(s, "p0").setup).toMatchObject({ chosen: 6, needed: 6, error: null });
+    // Somebody leaves: one card too many, the start waits.
+    s = applyAction(s, "p5", { type: "leave" }, ctx());
+    expect(see(s, "p0").setup).toMatchObject({ chosen: 6, needed: 5, roles: null });
+    fails(() => applyAction(s, "p0", { type: "start" }, ctx()), /gebraucht werden 5/);
+    // Adding is refused, taking one out is fine.
+    const counts = s.settings.counts;
+    fails(() => applyAction(s, "p0", { type: "settings", settings: { counts: { ...counts, dorfbewohner: 2 } } }, ctx()), /nur 5 Plätze/);
+    s = applyAction(s, "p0", { type: "settings", settings: { counts: { ...counts, hexe: 0 } } }, ctx());
+    expect(see(s, "p0").setup).toMatchObject({ chosen: 5, needed: 5, error: null });
+    // Somebody joins: a place is free again, and the start waits for it.
+    s = addPlayer(s, { id: "p9", name: "Neu", tokenHash: "t9" });
+    expect(see(s, "p0").setup).toMatchObject({ chosen: 5, needed: 6, roles: null });
+    s = applyAction(s, "p0", { type: "settings", settings: { counts: { ...s.settings.counts, hexe: 1 } } }, ctx());
+    expect(applyAction(s, "p0", { type: "start" }, ctx(seeded(5))).players.every((p) => p.role !== null)).toBe(true);
   });
 });
 
