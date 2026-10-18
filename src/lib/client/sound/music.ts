@@ -78,7 +78,7 @@ const MIX: Record<Mood, Mix> = {
     howls: 1,
     shift: -12,
     warble: 6,
-    fire: 1,
+    fire: 2,
   },
   day: { pad: 0.26, sub: 0, cutoff: 1250, wind: 0, box: 0.2, bell: 0, crickets: 0, howls: 0, shift: 0, warble: 0, fire: 0 },
 };
