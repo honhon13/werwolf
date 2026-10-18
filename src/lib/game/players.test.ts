@@ -212,3 +212,44 @@ describe("one seat per device", () => {
     fails(() => act(s, "p0", { type: "rejoin", request: "r1", accept: true }), /schon einen Platz/);
   });
 });
+
+describe("seats around the fire", () => {
+  const order = (s: GameState) => s.players.map((p) => p.id);
+
+  it("stay where they were when somebody takes their seat on a new device", () => {
+    let s = game(["werwolf", "seherin", D, D, D]);
+    const seats = order(s);
+    s = requestRejoin(s, "p2", { id: "r1", tokenHash: "new-device" }, 1000);
+    s = act(s, "p0", { type: "rejoin", request: "r1", accept: true });
+    expect(order(s)).toEqual(seats);
+    expect(see(s, "p4").players.map((p) => p.id)).toEqual(seats);
+  });
+
+  it("keep the place of whoever is out, so nobody else moves", () => {
+    let s = game(["werwolf", "seherin", D, D, D, D]);
+    const seats = order(s);
+    s = night(s, "p0", "wolf", { targets: ["p3"] });
+    s = night(s, "p1", "seherin", { targets: ["p0"] });
+    s = leave(s, "p5");
+    expect(order(s)).toEqual(seats);
+    const view = see(s, "p2");
+    expect(view.players.map((p) => [p.id, p.alive])).toEqual([
+      ["p0", true],
+      ["p1", true],
+      ["p2", true],
+      ["p3", false],
+      ["p4", true],
+      ["p5", false],
+    ]);
+  });
+
+  it("are dealt again only for a new round, without whoever left", () => {
+    let s = game(["werwolf", "seherin", D, D, D]);
+    s = leave(s, "p2");
+    s = leave(s, "p0");
+    expect(s.phase).toBe("ended");
+    s = act(s, "p1", { type: "again" });
+    expect(order(s)).toEqual(["p1", "p3", "p4"]);
+  });
+});
+

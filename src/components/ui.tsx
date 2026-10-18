@@ -43,7 +43,7 @@ export function Title({ children, sub }: { children: ReactNode; sub?: ReactNode 
   );
 }
 
-function hue(text: string) {
+export function hue(text: string) {
   let h = 0;
   for (const ch of text) h = (h * 31 + ch.codePointAt(0)!) % 360;
   return h;

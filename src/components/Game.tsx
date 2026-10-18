@@ -12,6 +12,7 @@ import { NightPhase, RolesPhase } from "./phases/Night";
 import { nameOf, names, NoteText } from "./phases/shared";
 import { Rules } from "./Rules";
 import { Button, Card, cx, RoleChips, Sheet } from "./ui";
+import { Village } from "./Village";
 
 const day = (v: View) => `Tag ${v.round}`;
 
@@ -340,6 +341,7 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
             onOver={api.reload}
           />
         )}
+        {playing && <Village view={view} night={sky === "night"} />}
 
         {/* The key resets picked players whenever the game moves on. */}
         <main

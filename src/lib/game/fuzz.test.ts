@@ -147,6 +147,7 @@ function play(n: number, seed: number, manual: boolean, leaveChance = 0, expireC
     ctx,
   );
   s = applyAction(s, "p0", { type: "start" }, ctx);
+  const seats = s.players.map((p) => p.id);
 
   let steps = 0;
   let stuck = 0;
@@ -189,6 +190,11 @@ function play(n: number, seed: number, manual: boolean, leaveChance = 0, expireC
     // Every phase in which somebody has to act counts down, by day and by night.
     if (TIMED.includes(s.phase) && !(s.phase === "vote" && s.vote.round === 1 && s.settings.discussionSeconds === 0)) {
       expect(s.deadline, `${s.phase} without a countdown`).not.toBeNull();
+    }
+    // The seats around the fire stay as they were dealt, on every device.
+    expect(s.players.map((p) => p.id)).toEqual(seats);
+    for (const p of s.players) {
+      expect(viewFor(s, p.id, { now: 0, online: new Set() })!.players.map((q) => q.id)).toEqual(seats);
     }
     for (const p of s.players) checkPrivacy(s, p.id);
   }

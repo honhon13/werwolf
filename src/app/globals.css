@@ -157,10 +157,64 @@ body {
   transform: rotateY(180deg);
 }
 
+/* The village round: a clearing in the forest with a fire in the middle. */
+.clearing-night {
+  background: radial-gradient(circle, #6b3f1f 0%, #3a2a33 32%, #1b2338 62%, transparent 72%);
+}
+
+.clearing-day {
+  background: radial-gradient(circle, #c98d4f 0%, #c9a46a 30%, #9fbf73 58%, transparent 72%);
+}
+
+.fire-glow {
+  background: radial-gradient(circle, rgb(255 170 60 / 0.5), rgb(255 110 30 / 0.16) 45%, transparent 70%);
+  animation: glow 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    transform: scale(0.94);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+.flame,
+.flame-inner {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: flicker 1.1s ease-in-out infinite;
+}
+
+.flame-inner {
+  animation-duration: 0.8s;
+  animation-direction: reverse;
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    transform: scale(1, 1) skewX(0deg);
+  }
+  25% {
+    transform: scale(0.97, 1.06) skewX(-2deg);
+  }
+  50% {
+    transform: scale(1.03, 0.95) skewX(1.5deg);
+  }
+  75% {
+    transform: scale(0.98, 1.04) skewX(-1deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sky::before,
   .rise,
-  .sheet-up {
+  .sheet-up,
+  .fire-glow,
+  .flame,
+  .flame-inner {
     animation: none;
   }
   .flip-inner {
