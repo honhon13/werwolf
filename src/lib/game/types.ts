@@ -183,7 +183,7 @@ export type Note =
   | { kind: "turned"; round: number; why: "infected" | "model" | "dog" }
   | { kind: "infected"; round: number; target: string }
   | { kind: "protected"; round: number; target: string; actor?: boolean }
-  | { kind: "marked"; round: number; target: string; actor?: boolean }
+  | { kind: "marked"; round: number; target: string }
   | { kind: "enchanted"; round: number; targets: string[] };
 
 export interface HistoryEntry {

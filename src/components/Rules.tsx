@@ -1,4 +1,13 @@
-import { CAPTAIN_TEXT, CATEGORY_NAMES, type Category, NOT_AVAILABLE, ROLE_ORDER, ROLES, SOURCE_NAMES } from "@/lib/game/roles";
+import {
+  CAPTAIN_TEXT,
+  CATEGORY_NAMES,
+  type Category,
+  DECISION_MS,
+  NOT_AVAILABLE,
+  ROLE_ORDER,
+  ROLES,
+  SOURCE_NAMES,
+} from "@/lib/game/roles";
 
 const STEPS = [
   ["🎭", "Rolle ansehen", "Jeder bekommt heimlich eine Rolle. Zeig dein Handy niemandem!"],
@@ -11,7 +20,7 @@ const STEPS = [
 const RULES = [
   "Wer ausscheidet, zeigt seine Rolle, darf zuschauen und verrät nichts mehr.",
   "Am Tag beratet ihr und stimmt gleichzeitig ab. Ausgezählt wird, sobald alle abgestimmt haben – spätestens, wenn die eingestellte Zeit zum Diskutieren um ist. Bis dahin kann jeder seine Stimme ändern; wer nicht abstimmt, bekommt einen zufälligen Mitspieler. Bei Gleichstand wird der Sündenbock verbannt; ohne ihn gibt es eine Stichwahl, und steht es wieder gleich, muss niemand gehen.",
-  "Für jede andere Entscheidung habt ihr 20 Sekunden. Wer nichts tut: Eine Pflichtwahl trifft der Zufall, freiwillige Fähigkeiten bleiben ungenutzt, und bei der Hauptmannwahl zählt es als Enthaltung.",
+  `Für jede andere Entscheidung und jedes „Weiter“ habt ihr ${DECISION_MS / 1000} Sekunden. Wer nichts tut: Eine Pflichtwahl trifft der Zufall, freiwillige Fähigkeiten bleiben ungenutzt, bei der Hauptmannwahl zählt es als Enthaltung, und nach einer Verkündung geht es einfach weiter.`,
   "Das Rudel gewinnt, sobald es mindestens so viele Wölfe gibt wie alle anderen zusammen. Das Dorf gewinnt, wenn kein Wolf, kein Weißer Werwolf und kein Flötenspieler mehr lebt.",
   "Sind die Verliebten aus verschiedenen Teams, gewinnen sie nur gemeinsam als die letzten beiden.",
   "Die Sitzreihenfolge ist die Reihenfolge in der Lobby – wichtig für Fuchs, Bärenführer und Ritter.",

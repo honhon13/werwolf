@@ -11,7 +11,7 @@ const expire = (s: GameState, rng = seeded(1)) => expireIfDue(s, ctx(rng, over(s
 const at = (s: GameState, id: string, action: Action, now: number) => applyAction(s, id, action, ctx(undefined, now));
 
 describe("decision time", () => {
-  it("gives every decision 20 seconds on the server's clock", () => {
+  it("gives every decision the same time on the server's clock", () => {
     let s = game(["werwolf", "seherin", D, D, D], { captain: true });
     expect(s.phase).toBe("night");
     expect(s.deadline).toBe(1000 + DECISION_MS);
@@ -19,7 +19,7 @@ describe("decision time", () => {
     s = night(s, "p0", "wolf", { targets: ["p4"] });
     s = night(s, "p1", "seherin", { targets: ["p0"] });
     expect(s.phase).toBe("announce");
-    expect(s.deadline).toBeNull();
+    expect(s.deadline).toBe(1000 + DECISION_MS);
     s = ackAll(s);
     expect(s).toMatchObject({ phase: "election", deadline: 1000 + DECISION_MS });
   });
@@ -243,8 +243,8 @@ describe("phases end as soon as everybody is done", () => {
     settled(s, deadline);
     deadline = s.deadline!;
     s = at(s, "p3", { type: "night", task: "hexe" }, 25_000);
-    expect(s.phase).toBe("announce");
-    expect(s.deadline).toBeNull();
+    // The morning has its own time to tap "Weiter".
+    expect(s).toMatchObject({ phase: "announce", deadline: 25_000 + DECISION_MS });
     settled(s, deadline);
   });
 
@@ -269,7 +269,7 @@ describe("phases end as soon as everybody is done", () => {
     s = ackAll(s);
     let deadline = s.deadline!;
     for (const id of ["p0", "p1", "p2", "p3", "p4"]) s = at(s, id, { type: "vote", target: "p2" }, 5_000);
-    expect(s).toMatchObject({ phase: "announce", deadline: null });
+    expect(s).toMatchObject({ phase: "announce", deadline: 5_000 + DECISION_MS });
     settled(s, deadline);
     s = ackAll(s);
     expect(s.phase).toBe("vote");
@@ -310,8 +310,55 @@ describe("phases end as soon as everybody is done", () => {
     s = ackAll(s);
     const deadline = s.deadline!;
     s = at(s, "p1", { type: "choose", targets: ["p2"] }, 5_000);
-    expect(s).toMatchObject({ phase: "announce", deadline: null });
+    expect(s).toMatchObject({ phase: "announce", deadline: 5_000 + DECISION_MS });
     settled(s, deadline);
+  });
+});
+
+describe("announcements", () => {
+  /** The morning after a night in which p4 was taken. */
+  function morning(roles = ["werwolf", "seherin", D, D, D] as RoleId[]) {
+    let s = game(roles);
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    return night(s, "p1", "seherin", { targets: ["p0"] });
+  }
+
+  it("count down the decision time, and take whoever did not tap along", () => {
+    let s = morning();
+    expect(s).toMatchObject({ phase: "announce", deadline: 1000 + DECISION_MS });
+    expect(see(s, "p2").deadline).toBe(1000 + DECISION_MS);
+    s = act(s, "p1", { type: "ack" });
+    expect(expireIfDue(s, ctx(undefined, s.deadline! + GRACE_MS - 1))).toBe(s);
+    s = timeUp(s);
+    expect(s.phase).toBe("vote");
+  });
+
+  it("end at once when everybody alive has tapped, without waiting for the dead", () => {
+    let s = morning();
+    const deadline = s.deadline!;
+    for (const id of ["p0", "p1", "p2"]) s = at(s, id, { type: "ack" }, 5_000);
+    expect(s.phase).toBe("announce");
+    s = at(s, "p3", { type: "ack" }, 5_000);
+    expect(s.phase).toBe("vote");
+    // The old deadline does nothing any more.
+    expect(expireIfDue(s, ctx(undefined, deadline + GRACE_MS))).toBe(s);
+  });
+
+  it("time out after the verdict and after a last choice too", () => {
+    let s = toVote(morning());
+    s = votes(s, { p0: "p2", p1: "p2", p2: "p0", p3: "p2" });
+    expect(s).toMatchObject({ phase: "announce", deadline: expect.any(Number) });
+    s = timeUp(s);
+    expect(s).toMatchObject({ phase: "night", round: 2 });
+
+    let h = game(["werwolf", "jaeger", D, D, D]);
+    h = night(h, "p0", "wolf", { targets: ["p1"] });
+    h = timeUp(h);
+    expect(h.phase).toBe("hunter");
+    h = act(h, "p1", { type: "choose", targets: ["p2"] });
+    expect(h.announce?.kind).toBe("hunter");
+    h = timeUp(h);
+    expect(h.phase).toBe("vote");
   });
 });
 

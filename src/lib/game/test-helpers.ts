@@ -37,7 +37,7 @@ export function game(
   s.mode = modeFor(roles.length);
   s.players.forEach((p, i) => (p.role = roles[i]));
   s.center = opts.center ?? [];
-  if (roles.includes("schauspieler")) s.actorPowers = ACTOR_POWERS.slice(0, 3);
+  if (roles.includes("schauspieler")) s.actorPowers = [...ACTOR_POWERS];
   s.elderShield = roles.includes("aeltester");
   s.angelChance = roles.includes("engel");
   s.phase = "roles";

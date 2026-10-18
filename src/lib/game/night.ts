@@ -281,12 +281,8 @@ export function nightAction(s: GameState, me: Player, action: NightAction) {
       } else if (power === "beschuetzer") {
         n.actorProtect = target.id;
         note(s, me.id, { kind: "protected", round: s.round, target: target.id, actor: true });
-      } else if (power === "fuchs") {
-        sniff(s, me, target, true);
       } else {
-        notMe(target);
-        n.marks.push(target.id);
-        note(s, me.id, { kind: "marked", round: s.round, target: target.id, actor: true });
+        sniff(s, me, target, true);
       }
       s.actorPowers = s.actorPowers.filter((r) => r !== power);
       log(s, `Der Schauspieler spielte ${roleName(power)} und wählte ${target.name}.`, true);

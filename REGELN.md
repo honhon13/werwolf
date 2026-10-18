@@ -204,7 +204,7 @@ Jeder Tod löst sofort seine Folgen aus (siehe 6).
   1. Lebt der **Sündenbock**, scheidet er aus (Neumond) und bestimmt, wer am
      nächsten Tag abstimmen darf.
   2. Sonst gibt es **eine Stichwahl** nur zwischen den Gleichplatzierten
-     (Hausregel). Sie hat 20 Sekunden und dieselben Regeln: Stimmen lassen
+     (Hausregel). Sie hat die Entscheidungszeit (siehe 10) und dieselben Regeln: Stimmen lassen
      sich ändern, bis alle abgestimmt haben, fehlende werden zufällig
      vergeben.
   3. Steht es wieder gleich, scheidet **niemand** aus (Hausregel).
@@ -290,7 +290,7 @@ Abstimmung übersteht.
 | Rabe | Charaktere | markiert jede Nacht einen Spieler (darf auslassen), siehe 5 |
 | Ritter mit der rostigen Klinge | Charaktere | siehe 6 |
 | Engel | Charaktere | siehe 3 und 6; danach normaler Dorfbewohner |
-| Schauspieler | Charaktere, **Digitalregel** | bekommt vier Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe und benutzt jede Nacht höchstens eine, jede nur einmal; seine Schutz-Nacht zählt nicht für „nie zweimal denselben“, ein Fuchs-Fehlschlag kostet nichts |
+| Schauspieler | Charaktere, **Digitalregel** | hat immer dieselben drei Fähigkeiten – Seherin, Beschützer und Fuchs – und benutzt jede Nacht höchstens eine, jede nur einmal im Spiel; seine Schutz-Nacht zählt nicht für „nie zweimal denselben“, ein Fuchs-Fehlschlag kostet nichts |
 
 Alle Dorfrollen mit Fähigkeit verlieren sie, wenn das Dorf den Ältesten
 getötet hat. Wer infiziert wird, behält seine Fähigkeit, gewinnt aber mit dem
@@ -332,7 +332,11 @@ Jeder kann jederzeit über das Menü gehen.
 
 - **Zeitlimit:** Jeder Schritt der Nacht, die Stichwahl, die Hauptmannwahl
   und jede Wahl, die einer für alle trifft (Schuss des Jägers, neuer
-  Hauptmann, Wahl des Sündenbocks), hat **20 Sekunden**. Die Abstimmung des
+  Hauptmann, Wahl des Sündenbocks) und jede Verkündung (Morgen, Urteil,
+  Schuss des Jägers, neuer Hauptmann, Wahl des Sündenbocks) hat dieselbe
+  **Entscheidungszeit**, derzeit **60 Sekunden** (`DECISION_MS` in
+  `src/lib/game/roles.ts`). Bei einer Verkündung geht es nach Ablauf für alle
+  weiter, auch wenn jemand nicht „Weiter“ getippt hat. Die Abstimmung des
   Tages dauert so lange wie die eingestellte „Zeit zum Diskutieren“ (siehe
   5). Alle Handys zeigen denselben Countdown, gezählt nach der Uhr des
   Servers.

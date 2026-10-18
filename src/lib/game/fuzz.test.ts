@@ -86,7 +86,7 @@ function nightMove(v: View, task: Task, rng: () => number): Action {
   if (task.id === "schauspieler") {
     if (rng() < 0.3 || task.options.length === 0) return { ...base, option: "pass" };
     const power = pick(task.options, rng).id;
-    const targets = task.targets.filter((t) => (power === "seherin" || power === "rabe" ? t !== v.me.id : true));
+    const targets = task.targets.filter((t) => (power === "seherin" ? t !== v.me.id : true));
     return { ...base, option: power, targets: [pick(targets, rng)] };
   }
   if (task.options.length > 0) return { ...base, option: pick(task.options, rng).id };
@@ -121,6 +121,8 @@ function checkPrivacy(s: GameState, viewer: string) {
     if (t.attacked) expect(me.role).toBe("hexe");
   }
 }
+
+const TIMED: GameState["phase"][] = ["night", "announce", "vote", "election", "hunter", "succession", "scapegoat"];
 
 /** How often the host had to skip a step, across the games played so far. */
 let forced = 0;
@@ -183,6 +185,10 @@ function play(n: number, seed: number, manual: boolean, leaveChance = 0, expireC
       if (++stuck > 50) throw new Error(`no move n=${n} seed=${seed} in ${s.phase}/${s.night.step}`);
       forced++;
       s = applyAction(s, s.hostId, { type: "force" }, ctx);
+    }
+    // Every phase in which somebody has to act counts down, by day and by night.
+    if (TIMED.includes(s.phase) && !(s.phase === "vote" && s.vote.round === 1 && s.settings.discussionSeconds === 0)) {
+      expect(s.deadline, `${s.phase} without a countdown`).not.toBeNull();
     }
     for (const p of s.players) checkPrivacy(s, p.id);
   }

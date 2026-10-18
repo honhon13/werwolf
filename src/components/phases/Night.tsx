@@ -244,7 +244,7 @@ function TaskScreen({ view, api, task }: PhaseProps & { task: Task }) {
   const [min, max] = actor ? [1, 1] : task.count;
   const choosesOption = task.options.length > 0 || actor;
   const needsTarget = actor ? Boolean(option && option !== "pass") : max > 0;
-  const noSelf = actor && (option === "seherin" || option === "rabe");
+  const noSelf = actor && option === "seherin";
   const targets = view.players.filter((p) => task.targets.includes(p.id) && !(noSelf && p.id === view.me.id));
   const votes = task.wolfVotes ?? {};
   const changed = task.id !== "wolf" || picked[0] !== task.pick?.[0];

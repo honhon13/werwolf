@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { addPlayer, applyAction, newGame, normalize } from "./engine";
+import { ACTOR_POWERS } from "./roles";
+import { ackAll, act, alive, ctx, fails, game, night, seeded, see, tasks, toVote, votes } from "./test-helpers";
+import type { GameState } from "./types";
 import { checkWinner } from "./win";
-import { ackAll, act, alive, fails, game, night, see, tasks, toVote, votes } from "./test-helpers";
 
 const D = "dorfbewohner" as const;
 
@@ -440,7 +443,24 @@ describe("Engel", () => {
 });
 
 describe("Schauspieler", () => {
-  it("uses each of his three abilities once", () => {
+  it("always gets the same three abilities: Seherin, Beschützer and Fuchs", () => {
+    expect(ACTOR_POWERS).toEqual(["seherin", "beschuetzer", "fuchs"]);
+    for (let seed = 1; seed <= 10; seed++) {
+      let s = newGame("TEST", 0);
+      for (let i = 0; i < 6; i++) s = addPlayer(s, { id: `p${i}`, name: `P${i}`, tokenHash: `t${i}` });
+      const counts = { werwolf: 1, schauspieler: 1, seherin: 1, dorfbewohner: 3 };
+      s = applyAction(s, "p0", { type: "settings", settings: { auto: false, counts } }, ctx());
+      s = applyAction(s, "p0", { type: "start" }, ctx(seeded(seed)));
+      expect(s.actorPowers).toEqual(["seherin", "beschuetzer", "fuchs"]);
+    }
+  });
+
+  it("drops a Rabe ability left over in a saved game", () => {
+    const old = { ...game(["werwolf", "schauspieler", D, D, D]), actorPowers: ["rabe", "fuchs"] } as GameState;
+    expect(normalize(old).actorPowers).toEqual(["fuchs"]);
+  });
+
+  it("uses each of his three abilities once, and nothing else", () => {
     let s = game(["werwolf", "schauspieler", D, D, D]);
     expect(see(s, "p1").actorPowers).toEqual(["seherin", "beschuetzer", "fuchs"]);
     fails(() => night(s, "p1", "schauspieler", { option: "rabe", targets: ["p2"] }));
@@ -453,6 +473,21 @@ describe("Schauspieler", () => {
     fails(() => night(s, "p1", "schauspieler", { option: "beschuetzer", targets: ["p3"] }));
     s = night(s, "p1", "schauspieler", { option: "seherin", targets: ["p0"] });
     expect(see(s, "p1").notes.at(-1)).toMatchObject({ kind: "seen", target: "p0", role: "werwolf", actor: true });
+    s = night(s, "p0", "wolf", { targets: ["p4"] });
+    s = toVote(s);
+    s = votes(s, { p0: null, p1: null, p2: null, p3: null });
+    s = ackAll(s);
+    fails(() => night(s, "p1", "schauspieler", { option: "hexe", targets: ["p2"] }));
+    // The Fuchs: p2 and his neighbours p1 and p3 are no wolves – and that costs him nothing.
+    s = night(s, "p1", "schauspieler", { option: "fuchs", targets: ["p2"] });
+    expect(see(s, "p1").notes.at(-1)).toMatchObject({ kind: "sniffed", targets: ["p2", "p1", "p3"], wolf: false, actor: true });
+    expect(s.actorPowers).toEqual([]);
+    s = night(s, "p0", "wolf", { targets: ["p3"] });
+    s = toVote(s);
+    s = votes(s, { p0: null, p1: null, p2: null });
+    s = ackAll(s);
+    expect(s.phase).toBe("night");
+    expect(tasks(s, "p1")).toEqual([]);
   });
 });
 

@@ -28,7 +28,6 @@ import {
   modeFor,
   ROLE_ORDER,
   ROLES,
-  shuffle,
 } from "./roles";
 import { type Ctx, find, GameError, living, log, nameOf, roleName } from "./state";
 import type { Action, Announce, Death, GameState, Player, RoleId, Settings, Winner } from "./types";
@@ -40,7 +39,7 @@ export { GameError } from "./state";
 const NAME_MAX = 14;
 /** Rejoin requests older than this are dropped. */
 const REJOIN_TTL = 15 * 60 * 1000;
-const DECIDING: GameState["phase"][] = ["night", "vote", "election", "hunter", "succession", "scapegoat"];
+const DECIDING: GameState["phase"][] = ["night", "announce", "vote", "election", "hunter", "succession", "scapegoat"];
 
 /** Starts the clock for a decision. */
 function decide(s: GameState, ctx: Ctx) {
@@ -112,7 +111,12 @@ export function newGame(code: string, now: number): GameState {
  * full role system go back to the lobby with their players and settings.
  */
 export function normalize(raw: GameState): GameState {
-  if (raw.rev === STATE_REV) return { ...defaults(), ...raw };
+  if (raw.rev === STATE_REV) {
+    const s = { ...defaults(), ...raw };
+    // A Schauspieler dealt before the fix may still hold the Rabe as a fourth ability.
+    s.actorPowers = s.actorPowers.filter((r) => ACTOR_POWERS.includes(r));
+    return s;
+  }
   const old = raw as unknown as {
     code: string;
     createdAt: number;
@@ -243,7 +247,7 @@ function startGame(s: GameState, ctx: Ctx) {
   const { hands, center } = deal(comp.roles, s.players.length, ctx.rng);
   s.players.forEach((p, i) => (p.role = hands[i]));
   s.center = center;
-  if (hands.includes("schauspieler")) s.actorPowers = shuffle(ACTOR_POWERS, ctx.rng).slice(0, 3);
+  if (hands.includes("schauspieler")) s.actorPowers = [...ACTOR_POWERS];
   s.elderShield = hands.includes("aeltester");
   s.angelChance = hands.includes("engel");
   s.phase = "roles";
@@ -285,15 +289,16 @@ function advanceNight(s: GameState, ctx: Ctx) {
       decide(s, ctx);
       continue;
     }
-    announce(s, resolveNight(s), "day");
+    announce(s, ctx, resolveNight(s), "day");
   }
 }
 
-function announce(s: GameState, a: Announce, after?: GameState["after"]) {
+/** Shows what happened; everybody alive confirms with "Weiter", within the decision time. */
+function announce(s: GameState, ctx: Ctx, a: Announce, after?: GameState["after"]) {
   s.announce = a;
   s.phase = "announce";
   s.acks = [];
-  s.deadline = null;
+  decide(s, ctx);
   if (after) s.after = after;
 }
 
@@ -354,7 +359,7 @@ function startVote(s: GameState, ctx: Ctx) {
     log(s, "Heute durfte niemand abstimmen.", false);
     s.voters = null;
     s.marks = [];
-    announce(s, { kind: "verdict", deaths: [], ballots: {}, tie: false }, "night");
+    announce(s, ctx, { kind: "verdict", deaths: [], ballots: {}, tie: false }, "night");
   }
 }
 
@@ -363,7 +368,7 @@ function countVotes(s: GameState, ctx: Ctx) {
   if (!voters(s).every((p) => p.id in s.vote.ballots)) return;
   const election = s.vote.kind === "election";
   const result = election ? tallyElection(s, ctx) : tallyVerdict(s);
-  if (result) announce(s, result, election ? "discussion" : "night");
+  if (result) announce(s, ctx, result, election ? "discussion" : "night");
   // A tie: the runoff gets its own time.
   else decide(s, ctx);
 }
@@ -385,6 +390,9 @@ function expire(s: GameState, ctx: Ctx) {
   switch (s.phase) {
     case "discussion":
       return startVote(s, ctx);
+    case "announce":
+      // Whoever has not tapped "Weiter" is taken along.
+      return afterAnnounce(s, ctx);
     case "night":
       decideForAbsent(s, ctx.rng);
       return advanceNight(s, ctx);
@@ -404,7 +412,7 @@ function expire(s: GameState, ctx: Ctx) {
       const who = find(s, s.pending[0]!.who)!;
       const others = living(s).filter((p) => p.id !== who.id).map((p) => p.id);
       // The Jäger must shoot and a new Hauptmann must be named; the Sündenbock lets everybody vote.
-      return choose(s, who, s.phase === "scapegoat" ? others : [pick(others)]);
+      return choose(s, ctx, who, s.phase === "scapegoat" ? others : [pick(others)]);
     }
   }
 }
@@ -442,7 +450,7 @@ function ackComplete(s: GameState) {
 }
 
 /** A dead Jäger shoots, a Hauptmann names a successor, a Sündenbock picks tomorrow's voters. */
-function choose(s: GameState, me: Player, targets: string[]) {
+function choose(s: GameState, ctx: Ctx, me: Player, targets: string[]) {
   const pending = s.pending[0];
   if (!pending || pending.who !== me.id || s.phase !== pending.kind) {
     throw new GameError("Du bist gerade nicht dran.");
@@ -456,7 +464,7 @@ function choose(s: GameState, me: Player, targets: string[]) {
     const names = ids.map((id) => nameOf(s, id)).join(", ") || "niemand";
     log(s, `Der Sündenbock bestimmte, wer abstimmen darf: ${names}.`, false);
     s.pending.shift();
-    return announce(s, { kind: "scapegoat", deaths: [], voters: ids });
+    return announce(s, ctx, { kind: "scapegoat", deaths: [], voters: ids });
   }
   if (ids.length !== 1) throw new GameError("Wähle genau einen Spieler.");
   s.pending.shift();
@@ -465,11 +473,11 @@ function choose(s: GameState, me: Player, targets: string[]) {
     const powersBefore = s.powersLost;
     log(s, `Der Jäger schoss auf ${nameOf(s, ids[0])}.`, false);
     kill(s, ids[0], "jaeger", deaths);
-    return announce(s, { kind: "hunter", deaths, powersLost: s.powersLost && !powersBefore });
+    return announce(s, ctx, { kind: "hunter", deaths, powersLost: s.powersLost && !powersBefore });
   }
   s.captain = ids[0];
   log(s, `${nameOf(s, ids[0])} ist neuer Hauptmann.`, false);
-  announce(s, { kind: "succession", deaths: [], captain: ids[0] });
+  announce(s, ctx, { kind: "succession", deaths: [], captain: ids[0] });
 }
 
 /**
@@ -712,7 +720,7 @@ export function applyAction(
 
     case "choose":
       inTime();
-      choose(s, me, action.targets ?? []);
+      choose(s, ctx, me, action.targets ?? []);
       break;
 
     case "tick":

@@ -320,7 +320,7 @@ export const ROLES: Record<RoleId, RoleInfo> = {
     max: 1,
     village: true,
     goal: VILLAGE,
-    text: "Zu Spielbeginn bekommst du vier Fähigkeiten aus Seherin, Beschützer, Fuchs und Rabe. In jeder Nacht darfst du eine davon für diese Nacht benutzen, jede nur einmal.",
+    text: "Du hast drei Fähigkeiten: Seherin, Beschützer und Fuchs. In jeder Nacht darfst du eine davon für diese Nacht benutzen, jede nur einmal im Spiel.",
   },
 };
 
@@ -358,8 +358,8 @@ export const NOT_AVAILABLE: { name: string; reason: string }[] = [
 export const CAPTAIN_TEXT =
   "Wird am ersten Tag von allen gewählt. Seine Stimme zählt doppelt. Stirbt er, bestimmt er seinen Nachfolger.";
 
-/** The abilities the Schauspieler can be dealt. */
-export const ACTOR_POWERS: RoleId[] = ["seherin", "beschuetzer", "fuchs", "rabe"];
+/** The three abilities of the Schauspieler, each usable once per game. */
+export const ACTOR_POWERS: RoleId[] = ["seherin", "beschuetzer", "fuchs"];
 
 export function modeFor(n: number): Mode {
   return n === 3 ? "kurz" : n === 4 ? "vier" : "normal";

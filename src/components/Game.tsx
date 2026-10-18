@@ -192,8 +192,8 @@ function Rejoins({ view, api }: { view: View; api: RoomApi }) {
   );
 }
 
-/** Phases in which players decide something within the time limit. */
-const TIMED: Phase[] = ["night", "vote", "election", "hunter", "succession", "scapegoat"];
+/** Phases in which players decide or confirm something within the time limit. */
+const TIMED: Phase[] = ["night", "announce", "vote", "election", "hunter", "succession", "scapegoat"];
 
 /**
  * The seconds left for a decision, counted against the server's clock so
