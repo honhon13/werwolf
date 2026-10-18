@@ -6,6 +6,7 @@ Hier steht für jede Audiodatei, was du sprichst und wann die App sie abspielt.
 
 1. Nimm jeden Text einzeln auf, zum Beispiel mit „Sprachmemos“ auf dem iPhone oder Mac.
 2. Benenne die Aufnahme genau so wie in der Liste. Erlaubt sind `.m4a`, `.mp3` und `.wav`.
+   Die Endung darf nur einmal dastehen (nicht `.m4a.m4a`), sonst findet die App die Datei nicht.
 3. Lege sie in den Ordner `public/audio/sprache/`. Dort liegen schon leere
    Platzhalter mit den richtigen Namen, die du einfach überschreibst.
 4. Stelle die Dateien live: committen und pushen, oder sag mir Bescheid.
@@ -57,7 +58,7 @@ also nach und nach aufnehmen, das Spiel funktioniert die ganze Zeit.
 | 26 | `26-suendenbock-entschieden` | der Sündenbock sich entschieden hat |
 | 27 | `27-urteil-dorfdepp` | das Dorf den Dorfdepp verbannen wollte und er bleiben darf |
 
-Die Dateien 18 bis 27 sind noch leere Platzhalter.
+Alle 27 Dateien sind aufgenommen.
 
 **Bewusst ohne Ansage:** die weiteren Schritte der Nacht nach dem Einschlafen
 (außer der Hexe) – sonst würde man hören, welche Rollen noch im Spiel sind.
