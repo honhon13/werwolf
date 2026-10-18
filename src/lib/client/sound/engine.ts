@@ -135,7 +135,7 @@ class SoundEngine {
     if (mood && !this.music) {
       const music = new Music(ctx, musicBus, mood, ctx.currentTime);
       this.music = music;
-      const tick = () => music.schedule(ctx.currentTime + 1);
+      const tick = () => music.schedule(ctx.currentTime);
       tick();
       this.ticker = setInterval(tick, 250);
     } else if (mood && this.music) {

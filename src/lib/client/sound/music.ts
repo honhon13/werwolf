@@ -1,3 +1,5 @@
+import { Fire } from "./fire";
+
 export type Mood = "night" | "day";
 
 /** Seconds per quarter note. The tune is a waltz; the night drags it out. */
@@ -57,13 +59,35 @@ interface Mix {
   howls: number;
   /** The melody is moved by this many semitones. */
   shift: number;
+  /** How far the music box drifts out of tune and back, in cents, like an old one. */
+  warble: number;
+  /** The campfire: roar, hiss and crackling wood. */
+  fire: number;
 }
 
 /** How loud and how bright each layer is in the two moods. */
 const MIX: Record<Mood, Mix> = {
-  night: { pad: 0.42, sub: 0.1, cutoff: 470, wind: 0.26, box: 0.46, bell: 0.22, crickets: 0.03, howls: 1, shift: -12 },
-  day: { pad: 0.26, sub: 0, cutoff: 1250, wind: 0, box: 0.2, bell: 0, crickets: 0, howls: 0, shift: 0 },
+  night: {
+    pad: 0.42,
+    sub: 0.1,
+    cutoff: 470,
+    wind: 0.2,
+    box: 0.46,
+    bell: 0.22,
+    crickets: 0.03,
+    howls: 1,
+    shift: -12,
+    warble: 6,
+    fire: 1,
+  },
+  day: { pad: 0.26, sub: 0, cutoff: 1250, wind: 0, box: 0.2, bell: 0, crickets: 0, howls: 0, shift: 0, warble: 0, fire: 0 },
 };
+
+/** How far ahead `schedule` queues notes, in seconds. */
+const AHEAD = 1;
+
+/** Seconds the fire keeps crackling after daybreak, while it fades out. */
+const EMBERS = 5;
 
 /** Seconds from nightfall to the first howl, and between howls after that. */
 const FIRST_HOWL = { after: 9, spread: 8 };
@@ -74,9 +98,9 @@ const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 /**
  * The background music, generated on the fly: a slow pad that glides from
  * chord to chord and a music-box melody with an echo. The night plays it
- * lower and slower, with wind, crickets, a distant bell and now and then a
- * wolf howling far away. Works on any audio context, so it can be rendered
- * offline.
+ * lower and slower on a slightly warped music box, with wind, crickets, the
+ * campfire, a distant bell and now and then a wolf howling far away. Works
+ * on any audio context, so it can be rendered offline.
  */
 export class Music {
   private readonly out: GainNode;
@@ -90,8 +114,12 @@ export class Music {
   private readonly boxLevel: GainNode;
   private readonly bellLevel: GainNode;
   private readonly howlLevel: GainNode;
+  private readonly warble: GainNode;
+  private readonly fire: Fire;
   private readonly running: AudioScheduledSourceNode[] = [];
   private mood: Mood;
+  /** Until when the fire still crackles after the night has ended. */
+  private embersUntil = 0;
   private bar = 0;
   private nextBarAt: number;
   private nextHowlAt: number;
@@ -168,6 +196,9 @@ export class Music {
     chirping.connect(this.cricketLevel).connect(this.out);
     this.start(chirping, startAt);
 
+    this.fire = new Fire(ctx, this.out, mix.fire, startAt);
+    this.warble = this.lfo(0.21, mix.warble, startAt);
+
     // Music box, bell and howls share an echo that makes the night feel wide.
     this.boxLevel = ctx.createGain();
     this.boxLevel.gain.value = mix.box;
@@ -194,9 +225,9 @@ export class Music {
 
   /** Cross-fades the layers to another mood; chords and tempo follow at the next bar. */
   setMood(mood: Mood, at: number) {
-    if (mood === "night" && this.mood !== "night") {
-      this.nextHowlAt = at + FIRST_HOWL.after + Math.random() * FIRST_HOWL.spread;
-    }
+    if (mood === this.mood) return;
+    if (mood === "night") this.nextHowlAt = at + FIRST_HOWL.after + Math.random() * FIRST_HOWL.spread;
+    else this.embersUntil = at + EMBERS;
     this.mood = mood;
     const mix = MIX[mood];
     const fade = (param: AudioParam, value: number) => param.setTargetAtTime(value, at, 0.9);
@@ -208,10 +239,16 @@ export class Music {
     fade(this.boxLevel.gain, mix.box);
     fade(this.bellLevel.gain, mix.bell);
     fade(this.howlLevel.gain, mix.howls);
+    fade(this.warble.gain, mix.warble);
+    this.fire.level.gain.setTargetAtTime(mix.fire, at, 1.2);
   }
 
-  /** Queues every bar that starts before `until`. Call this regularly. */
-  schedule(until: number) {
+  /** Queues everything that starts within the next second. Call this regularly with the current time. */
+  schedule(now: number) {
+    const until = now + AHEAD;
+    // After a stall the music picks up from now instead of playing the missed bars at once.
+    if (this.nextBarAt < now) this.nextBarAt = now + 0.05;
+    this.fire.schedule(now, until, this.mood === "night" ? Infinity : this.embersUntil);
     while (this.nextBarAt < until) {
       const at = this.nextBarAt;
       const beat = BEAT[this.mood];
@@ -240,6 +277,7 @@ export class Music {
     else this.out.gain.cancelScheduledValues(at);
     this.out.gain.setTargetAtTime(0, at, 0.25);
     for (const source of this.running) source.stop(at + 1.5);
+    this.fire.stop(at + 1.5);
     setTimeout(() => this.out.disconnect(), 2000);
   }
 
@@ -304,10 +342,15 @@ export class Music {
     return buffer;
   }
 
-  /** One decaying sine partial. */
-  private partial(to: AudioNode, freq: number, at: number, peak: number, decay: number) {
+  /** One decaying sine partial; `bend` moves its pitch, in cents. */
+  private partial(to: AudioNode, freq: number, at: number, peak: number, decay: number, bend?: AudioNode) {
     const osc = this.ctx.createOscillator();
     osc.frequency.value = freq;
+    if (bend) {
+      bend.connect(osc.detune);
+      // Lets the finished note go; the drift keeps running for the next ones.
+      osc.onended = () => bend.disconnect(osc.detune);
+    }
     const env = this.ctx.createGain();
     env.gain.setValueAtTime(0, at);
     env.gain.linearRampToValueAtTime(peak, at + 0.006);
@@ -319,11 +362,12 @@ export class Music {
 
   /**
    * A music-box note. By day it has a short glassy overtone on top; the dark
-   * version leaves that out and rings longer.
+   * version leaves that out, rings longer and drifts slightly out of tune.
    */
   private chime(freq: number, at: number, dark: boolean) {
-    this.partial(this.boxLevel, freq, at, 0.5, dark ? 2.8 : 1.9);
-    this.partial(this.boxLevel, freq * 2.003, at, dark ? 0.2 : 0.16, dark ? 1.4 : 1.0);
+    const bend = dark ? this.warble : undefined;
+    this.partial(this.boxLevel, freq, at, 0.5, dark ? 2.8 : 1.9, bend);
+    this.partial(this.boxLevel, freq * 2.003, at, dark ? 0.2 : 0.16, dark ? 1.4 : 1.0, bend);
     if (!dark) this.partial(this.boxLevel, freq * 4.2, at, 0.05, 0.25);
   }
 

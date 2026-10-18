@@ -46,6 +46,8 @@ die Musik lässt sich im Menü getrennt abstellen.
   nach dem Ablegen neuer Dateien also den Dev-Server neu starten.
 - **Musik:** wird im Browser erzeugt (`src/lib/client/sound/music.ts`), es gibt
   keine Musikdatei. Melodie, Akkorde und Lautstärken stehen oben in der Datei.
+  Nachts knistert dazu leise das Lagerfeuer (`fire.ts`, Lautstärken ebenfalls
+  oben in der Datei); es gehört zur Musik und wird mit ihr abgeschaltet.
 
 ## Aufbau
 
