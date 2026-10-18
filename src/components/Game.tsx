@@ -259,6 +259,7 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
   const [panel, setPanel] = useState<Panel>(null);
   const audio = useSoundSettings();
   const playing = view.phase !== "lobby";
+  const myName = view.players.find((p) => p.id === view.me.id)?.name;
   const sky = skyFor(view);
   const { error, clearError } = api;
 
@@ -294,9 +295,11 @@ export function Game({ view, clockOffset, api }: { view: View; clockOffset: numb
             <button
               type="button"
               onClick={() => setPanel("role")}
-              className="min-h-11 rounded-full border border-line bg-card px-4 text-sm font-extrabold"
+              className="flex min-h-11 flex-col items-start justify-center rounded-full border border-line bg-card px-4 text-sm leading-tight font-extrabold"
             >
-              🎭 Meine Rolle
+              <span>🎭 Meine Rolle</span>
+              {/* Only this device's own player, from the server's view; nothing if it is not there. */}
+              {myName && <span className="w-0 min-w-full truncate text-[11px] font-bold text-ink-soft">{myName}</span>}
             </button>
           ) : (
             <span className="min-h-11 content-center px-1 text-sm font-extrabold text-ink-soft">
